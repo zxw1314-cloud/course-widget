@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>桌面课表备忘录 - 设置</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Microsoft YaHei", system-ui, sans-serif; background: #f5f6fa; color: #2b2f38; font-size: 14px; }
+header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; background: #fff; border-bottom: 1px solid #e6e8ef; }
+header h1 { font-size: 18px; }
+.actions button { margin-left: 8px; }
+button { cursor: pointer; border: none; border-radius: 6px; padding: 7px 14px; background: #4080ff; color: #fff; font-size: 13px; }
+button:hover { opacity: .9; }
+button.ghost { background: #eef1f7; color: #2b2f38; }
+button.danger { background: #ff5a5a; }
+button.small { padding: 3px 8px; font-size: 12px; }
+.tabs { display: flex; gap: 4px; padding: 10px 20px 0; background: #fff; border-bottom: 1px solid #e6e8ef; }
+.tabs button { background: none; color: #6b7280; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 14px; }
+.tabs button.active { color: #4080ff; border-bottom-color: #4080ff; font-weight: 600; }
+main { padding: 16px 20px; overflow: auto; height: calc(100vh - 120px); }
+.card { background: #fff; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+.card h3 { font-size: 14px; margin-bottom: 10px; color: #3a4150; }
+.hidden { display: none; }
+label { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+input, select { border: 1px solid #d7dbe6; border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table.grid th, table.grid td { border: 1px solid #e3e6ef; padding: 6px; text-align: center; font-size: 12px; vertical-align: top; }
+table.grid th { background: #f0f3fa; }
+td.cell { cursor: pointer; min-height: 42px; }
+td.cell:hover { background: #f0f5ff; }
+td.cell .cname { color: #4080ff; font-weight: 600; display: block; }
+td.cell .cmeta { color: #9aa1b2; font-size: 11px; }
+.period-row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.period-row input[type=time] { width: 96px; }
+.period-row .idx { width: 40px; color: #6b7280; }
+ul.list { list-style: none; }
+ul.list li { display: flex; align-items: center; gap: 8px; padding: 7px 4px; border-bottom: 1px dashed #eef0f6; }
+ul.list li .txt { flex: 1; }
+.toast { margin-top: 10px; color: #4080ff; min-height: 18px; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 99; }
+.modal.hidden { display: none; }
+.modal-box { background: #fff; border-radius: 12px; padding: 18px 20px; width: 340px; }
+.modal-box h3 { margin-bottom: 12px; }
+.modal-box label { display: block; margin: 10px 0; }
+.modal-box label input { width: 100%; margin-top: 4px; }
+.modal-box .row { margin-top: 14px; justify-content: flex-end; }
+.todo-item .done { text-decoration: line-through; color: #9aa1b2; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📚 桌面课表备忘录</h1>
+  <div class="actions">
+    <button id="btnSave">💾 保存</button>
+    <button id="btnApplyWidget">🖼 保存并应用到桌面</button>
+  </div>
+</header>
+<nav class="tabs">
+  <button data-tab="timetable" class="active">课表</button>
+  <button data-tab="events">临时活动</button>
+  <button data-tab="todos">待办</button>
+  <button data-tab="settings">设置</button>
+</nav>
+<main>
+  <section id="tab-timetable">
+    <div class="card">
+      <h3>节次时间（每天第 1~N 节课的起止时间）</h3>
+      <div id="periods"></div>
+      <button class="ghost small" id="btnAddPeriod">+ 添加节次</button>
+    </div>
+    <div class="card">
+      <h3>每周课表（点击格子添加/编辑课程；再点"删除"清空）</h3>
+      <table class="grid" id="courseGrid"></table>
+    </div>
+  </section>
+  <section id="tab-events" class="hidden">
+    <div class="card">
+      <h3>添加临时活动（一次性日程，到点会提醒）</h3>
+      <div class="row">
+        <input id="evTitle" placeholder="活动名称" style="flex:1;min-width:160px">
+        <input id="evDate" type="date">
+        <input id="evTime" type="time" title="时间（可选）">
+        <input id="evPoints" placeholder="提前分钟,逗号分隔" style="width:120px">
+        <input id="evRepStart" type="number" min="0" placeholder="重复开始前" style="width:100px">
+        <input id="evRepEvery" type="number" min="1" placeholder="每N分钟" style="width:90px">
+        <button id="btnAddEvent">添加</button>
+      </div>
+    </div>
+    <div class="card"><h3>活动列表</h3><ul class="list" id="eventList"></ul></div>
+  </section>
+  <section id="tab-todos" class="hidden">
+    <div class="card">
+      <h3>按日期查看/添加待办（也可在桌面挂件点日期添加）</h3>
+      <div class="row">
+        <input id="todoDate" type="date">
+        <span id="todoDateLabel"></span>
+      </div>
+      <ul class="list" id="todoList"></ul>
+      <div class="row" style="margin-top:10px">
+        <input id="todoText" placeholder="添加待办" style="flex:1;min-width:160px">
+        <input id="tdTime" type="time" title="截止时间">
+        <button id="btnAddTodo">添加</button>
+      </div>
+      <div class="row" style="margin-top:6px;font-size:12px;color:#6b7280">
+        <span>提醒(提前分钟,逗号分隔)</span><input id="tdPoints" style="width:110px" placeholder="10,60">
+        <span>重复:开始前</span><input id="tdRepStart" type="number" min="0" style="width:60px">分/每<input id="tdRepEvery" type="number" min="1" style="width:60px">分
+      </div>
+    </div>
+  </section>
+  <section id="tab-settings" class="hidden">
+    <div class="card">
+      <h3>设置</h3>
+      <label>默认提前提醒（分钟）<input id="setRemind" type="number" min="0" style="width:100px"></label>
+      <label>开学日期（第1周周一，用于"周次"过滤）<input id="setSemester" type="date"></label>
+      <label>挂件宽度（像素，560~1600）<input id="setWidth" type="number" min="560" max="1600" style="width:110px"></label>
+      <label>挂件位置
+        <select id="setCorner">
+          <option value="bottomRight">右下角</option>
+          <option value="topRight">右上角</option>
+        </select>
+      </label>
+      <label><input id="setCompact" type="checkbox"> 挂件紧凑模式（只显示今日，节省空间）</label>
+      <label><input id="setWeekStrip" type="checkbox"> 挂件显示本周日期条</label>
+      <label><input id="setClickThrough" type="checkbox"> 挂件鼠标穿透（桌面点击不受影响，点日期添加待办需关闭）</label>
+      <label><input id="setAutostart" type="checkbox"> 开机自启</label>
+      <div class="row">
+        <button class="ghost" id="btnTestNotify">测试提醒</button>
+        <button class="ghost" id="btnExport">导出备份</button>
+        <button class="ghost" id="btnImport">导入备份</button>
+      </div>
+      <p class="toast" id="toast"></p>
+    </div>
+  </section>
+</main>
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <h3 id="modalTitle">编辑课程</h3>
+    <label>课程名 <input id="mName" placeholder="如：高等数学"></label>
+    <label>地点 <input id="mLocation" placeholder="如：A101（可留空）"></label>
+    <label>周次 <input id="mWeeks" placeholder="留空=每周；如 1-16 或 1,3,5"></label>
+    <label>提醒(提前分钟,逗号分隔) <input id="mPoints" placeholder="如 10,60；留空=默认10"></label>
+    <label>重复提醒：开始前 <input id="mRepStart" type="number" min="0" style="width:70px"> 分钟起，每 <input id="mRepEvery" type="number" min="1" style="width:60px"> 分钟提醒一次（留空=不重复）</label>
+    <div class="row">
+      <button class="danger hidden" id="mDelete">删除该课程</button>
+      <button id="mSave">保存</button>
+      <button class="ghost" id="mCancel">取消</button>
+    </div>
+  </div>
+</div>
+<script src="setup.js"></script>
+</body>
+</html>

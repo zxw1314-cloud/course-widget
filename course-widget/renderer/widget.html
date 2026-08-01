@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>桌面课表</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: transparent; }
+body { font-family: "Microsoft YaHei", system-ui, sans-serif; color: #eef1f8; font-size: 12px; user-select: none; }
+#widget { background: rgba(16, 20, 36, 0.66); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.13); border-radius: 14px; padding: 8px 10px 10px; margin: 2px; }
+
+.head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 0 2px; }
+.head .range { font-weight: 700; font-size: 13px; }
+.head .summary { color: #aab2c8; font-size: 11px; flex: 1; }
+.head .ic { background: none; border: none; color: #aab2c8; font-size: 13px; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.head .ic:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.weekrow { margin-top: 6px; }
+.weeklabel { font-size: 10px; color: #7d86a3; margin-bottom: 3px; padding-left: 2px; }
+.weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.day { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 4px 3px; cursor: pointer; min-width: 0; }
+.day:hover { background: rgba(255,255,255,0.10); }
+.day.today { background: rgba(64,128,255,0.28); border-color: rgba(120,170,255,0.6); }
+.day .dhead { text-align: center; padding-bottom: 3px; margin-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.day .dhead .dw { font-size: 10px; color: #9fb0d6; display: block; }
+.day .dhead .dn { font-size: 15px; font-weight: 700; line-height: 1.1; }
+.day.today .dhead .dn { color: #8fc1ff; }
+.ditems { display: flex; flex-direction: column; gap: 2px; }
+.it { padding: 1px 2px; border-radius: 4px; font-size: 11px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.it .tm { opacity: 0.75; margin-right: 2px; }
+.it.course { color: #e8ecf6; }
+.it.todo { color: #ffd76a; }
+.it.event { color: #ff8a80; }
+.it.done { text-decoration: line-through; opacity: 0.5; }
+.empty { color: #66708a; text-align: center; padding: 4px 0; font-size: 10px; }
+.hint { margin-top: 6px; color: #7d86a3; font-size: 10px; text-align: center; }
+</style>
+</head>
+<body>
+<div id="widget">
+  <div class="head">
+    <span class="range" id="range"></span>
+    <span class="summary" id="summary"></span>
+    <button class="ic" id="btnHide" title="隐藏挂件（托盘可恢复）">✕</button>
+    <button class="ic" id="btnGear" title="打开设置">⚙</button>
+  </div>
+  <div class="weekrow">
+    <div class="weeklabel" id="label1">本周</div>
+    <div class="weekdays" id="week1"></div>
+  </div>
+  <div class="weekrow">
+    <div class="weeklabel" id="label2">下周</div>
+    <div class="weekdays" id="week2"></div>
+  </div>
+  <div class="hint">点击日期查看/添加待办 · 挂件已固定到角落（设置可切换右上角）</div>
+</div>
+<script src="widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>当日安排</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: transparent; }
+body { font-family: "Microsoft YaHei", system-ui, sans-serif; color: #2b2f38; font-size: 13px; user-select: none; }
+#popup { background: rgba(250,251,254,0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(0,0,0,0.08); border-radius: 14px; padding: 12px 14px; margin: 2px; max-height: calc(100vh - 4px); overflow: auto; }
+.head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.head .title { font-weight: 700; font-size: 15px; }
+.head button { background: none; border: none; font-size: 15px; cursor: pointer; color: #6b7280; padding: 2px 6px; border-radius: 6px; }
+.head button:hover { background: #eef1f7; }
+.sec { margin-bottom: 12px; }
+.sec h4 { font-size: 12px; color: #8a91a5; margin-bottom: 6px; }
+.item { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #eef0f6; border-radius: 8px; padding: 5px 8px; margin-bottom: 4px; }
+.item .tm { font-size: 11px; min-width: 68px; }
+.item.course { color: #2b2f38; }
+.item.todo .txt { color: #a17700; }
+.item.event .txt { color: #d23c2f; }
+.item .txt { flex: 1; word-break: break-all; }
+.item .del { background: none; border: none; color: #b6bccb; cursor: pointer; font-size: 13px; padding: 0 4px; }
+.item .del:hover { color: #ff5a5a; }
+.item.done .txt { text-decoration: line-through; opacity: 0.55; }
+button.add { cursor: pointer; border: none; border-radius: 6px; padding: 6px 12px; background: #4080ff; color: #fff; font-size: 12px; }
+button.add:hover { opacity: .9; }
+.form { background: #f7f9fd; border: 1px dashed #d7dbe6; border-radius: 10px; padding: 8px; margin-top: 6px; }
+.form .row { display: flex; gap: 6px; margin-bottom: 6px; }
+.form .row:last-child { margin-bottom: 0; }
+.form input, .form select { border: 1px solid #d7dbe6; border-radius: 6px; padding: 5px 7px; font-size: 12px; }
+.form input.flex { flex: 1; min-width: 60px; }
+.form .rm { font-size: 11px; color: #6b7280; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.form .rm input { width: 70px; }
+.todo-add .txt-input { flex: 1; }
+</style>
+</head>
+<body>
+<div id="popup">
+  <div class="head"><span class="title" id="title"></span><button id="btnClose">✕</button></div>
+
+  <div class="sec"><h4>📖 课程</h4><div id="courses"></div></div>
+
+  <div class="sec todo"><h4>✅ 待办（黄）</h4><div id="todos"></div>
+    <div class="form todo-add">
+      <div class="row">
+        <input class="txt-input" id="tText" placeholder="待办内容">
+        <input id="tTime" type="time" title="截止时间">
+        <button class="add" id="btnAddTodo">添加</button>
+      </div>
+      <div class="rm">
+        <span>提醒(提前分钟,逗号分隔):</span><input id="tPoints" placeholder="10,60">
+        <span>重复:</span><input id="tRepStart" type="number" min="0" placeholder="开始前" style="width:52px">分钟/每<input id="tRepEvery" type="number" min="1" placeholder="10" style="width:46px">分钟
+      </div>
+    </div>
+  </div>
+
+  <div class="sec"><h4>🗓 临时活动（红）</h4><div id="events"></div>
+    <div class="form">
+      <div class="row">
+        <input class="flex" id="eTitle" placeholder="活动名称">
+        <input id="eTime" type="time">
+        <button class="add" id="btnAddEvent">添加</button>
+      </div>
+      <div class="rm">
+        <span>提醒(提前分钟,逗号分隔):</span><input id="ePoints" placeholder="10,60">
+        <span>重复:</span><input id="eRepStart" type="number" min="0" placeholder="开始前" style="width:52px">分钟/每<input id="eRepEvery" type="number" min="1" placeholder="10" style="width:46px">分钟
+      </div>
+    </div>
+  </div>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

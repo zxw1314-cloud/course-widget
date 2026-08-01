@@ -1,0 +1,14 @@
+{
+  "name": "course-widget",
+  "productName": "桌面课表备忘录",
+  "version": "0.1.0",
+  "description": "每周课表 + 上课提醒 + 临时活动 + 半透明壁纸挂件（点击日期添加待办）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "helper:build": "powershell -NoProfile -ExecutionPolicy Bypass -File build-helper.ps1"
+  },
+  "devDependencies": {
+    "electron": "^43.2.0"
+  }
+}
