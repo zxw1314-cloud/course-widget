@@ -76,7 +76,7 @@ function normReminders(mins) {
 
 function loadData() {
   try {
-    const raw = JSON.parse(fs.readFileSync(DATA_FILE(), 'utf8'));
+    const raw = JSON.parse(fs.readFileSync(DATA_FILE(), 'utf8').replace(/^\\uFEFF/, ''));
     return migrate(raw);
   } catch (e) { return defaultData(); }
 }
@@ -123,6 +123,7 @@ function createWidgetWindow() {
   });
   widgetWin.loadFile(path.join(__dirname, 'renderer', 'widget.html'));
   widgetWin.once('ready-to-show', () => {
+    embedIntoWallpaper(widgetWin);
     widgetWin.show();
     if (data.settings.clickThrough) widgetWin.setIgnoreMouseEvents(true, { forward: true });
   });
@@ -291,7 +292,7 @@ ipcMain.handle('widget:resize', (e, w, h) => {
     const ch = Math.max(120, Math.min(Math.round(h) || b.height, Math.floor(screen.getPrimaryDisplay().workArea.height * 0.8)));
     const p = anchorPos(cw, ch);
     widgetWin.setBounds({ x: p.x, y: p.y, width: cw, height: ch });
-    data.settings.widgetWidth = cw; data.settings.widgetHeight = ch;
+    data.settings.widgetHeight = ch;
   }
   return true;
 });

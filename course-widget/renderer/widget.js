@@ -98,6 +98,22 @@ function render() {
   $('summary').textContent = '今天：' + (parts.join(' · ') || '无安排');
 }
 
+
+// 选择性点击穿透：空白区域让鼠标穿透到桌面，日期格子/按钮保留交互
+let clickThroughOn = false;
+document.addEventListener('mousemove', (e) => {
+  const t = e.target;
+  const interactive = t && t.closest && t.closest('.day, button');
+  const want = !interactive;
+  if (want !== clickThroughOn) {
+    clickThroughOn = want;
+    if (window.api.setClickThrough) window.api.setClickThrough(want);
+  }
+});
+document.addEventListener('mouseleave', () => {
+  if (!clickThroughOn) { clickThroughOn = true; if (window.api.setClickThrough) window.api.setClickThrough(true); }
+});
+window.__ctState = () => clickThroughOn;
 let resizeTimer = null;
 function scheduleResize() {
   clearTimeout(resizeTimer);
