@@ -123,7 +123,6 @@ function createWidgetWindow() {
   });
   widgetWin.loadFile(path.join(__dirname, 'renderer', 'widget.html'));
   widgetWin.once('ready-to-show', () => {
-    embedIntoWallpaper(widgetWin);
     widgetWin.show();
     if (data.settings.clickThrough) widgetWin.setIgnoreMouseEvents(true, { forward: true });
   });
