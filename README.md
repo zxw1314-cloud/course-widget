@@ -109,6 +109,14 @@ npm run build-helper  # 构建 C# 壁纸嵌入助手（当前未启用，见 doc
 - 架构决策见 [`course-widget/docs/adr/`](course-widget/docs/adr/)
 - 领域词汇表见 [`course-widget/CONTEXT.md`](course-widget/CONTEXT.md)
 
+## 重要提醒
+
+Notice: A large portion of code in this repository is AI-generated raw output.
+The author cannot fully understand, maintain or debug all source code.
+Use at your own risk.
+
+提示：本仓库大量代码由AI直接生成，作者无法完全读懂、维护、修复全部代码。使用者自行承担全部风险。
+
 ## 📄 License
 
 [MIT](LICENSE) © 2026 Czj30
