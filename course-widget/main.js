@@ -46,7 +46,7 @@ function defaultData() {
     ],
     courses: [],  // { id, name, day(1-7), period, weeks:[]|null, location, reminders:{points:[],repeat:null} }
     todos: {},    // { 'YYYY-MM-DD': [ {id, text, deadline:'HH:MM'|null, done, reminders:{points:[],repeat:null}} ] }
-    events: [],   // { id, title, date, time:'HH:MM'|null, reminders:{points:[],repeat:null} }
+    events: [],   // { id, title, date, time:'HH:MM'|null, location:'string'|null, reminders:{points:[],repeat:null} }
     countdowns: [] // { id, title, date:'YYYY-MM-DD', color:'#xxxxxx'|null }
   };
 }
@@ -62,7 +62,7 @@ function migrate(raw) {
     teacher: c.teacher || null, color: c.color || null
   }));
   out.events = (out.events || []).map(ev => ({
-    id: ev.id, title: ev.title, date: ev.date, time: ev.time || null,
+    id: ev.id, title: ev.title, date: ev.date, time: ev.time || null, location: ev.location || null,
     reminders: ev.reminders || normReminders(ev.remindMinutes)
   }));
   for (const k of Object.keys(out.todos || {})) {
@@ -265,7 +265,7 @@ function checkReminders(force) {
     const startMin = toMinutes(ev.time);
     fireReminders(nowMin, todayKey, 'e:' + ev.id, startMin, ev.reminders,
       { now: '活动开始', before: '活动提醒' },
-      () => ev.title + ' (' + ev.time + ')');
+      () => ev.title + (ev.location ? ' @ ' + ev.location : '') + ' (' + ev.time + ')');
   }
   for (const cd of (data.countdowns || [])) {
     if (cd.date !== todayKey || !cd.time) continue;

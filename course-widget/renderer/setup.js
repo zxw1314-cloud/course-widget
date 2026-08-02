@@ -224,57 +224,105 @@ $('mSave').addEventListener('click', () => {
 });
 
 // ---- 临时活动 ----
+function isEventPast(ev) {
+  const now = new Date();
+  const nowKey = dateKey(now);
+  if (ev.date < nowKey) return true;
+  if (ev.date === nowKey && ev.time) {
+    const n = now.getHours() * 60 + now.getMinutes();
+    return toMinutes(ev.time) != null && toMinutes(ev.time) < n;
+  }
+  return false;
+}
 function renderEvents() {
   const list = $('eventList'); list.innerHTML = '';
   const items = [...data.events].sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
   if (!items.length) { list.innerHTML = '<li class="txt" style="color:#9aa1b2">暂无活动</li>'; return; }
+  let pastCount = 0;
   for (const ev of items) {
+    const past = isEventPast(ev);
+    if (past) pastCount++;
     const li = document.createElement('li');
-    li.innerHTML = `<span class="txt">📅 ${ev.date}（周${weekdayCN(ev.date)}）${ev.time ? ' ' + ev.time : ''} · <b>${esc(ev.title)}</b>${fmtPoints(ev.reminders) ? '（' + fmtPoints(ev.reminders) + '）' : ''}${fmtRepeat(ev.reminders) ? ' ' + fmtRepeat(ev.reminders) : ''}</span>
+    const color = past ? ' style="color:#d23c2f"' : '';
+    li.innerHTML = `<span class="txt"${color}>${past ? '⏰已过期 ' : ''}📅 ${ev.date}（周${weekdayCN(ev.date)}）${ev.time ? ' ' + ev.time : ''}${ev.location ? ' 📍' + esc(ev.location) : ''} · <b>${esc(ev.title)}</b>${fmtPoints(ev.reminders) ? '（' + fmtPoints(ev.reminders) + '）' : ''}${fmtRepeat(ev.reminders) ? ' ' + fmtRepeat(ev.reminders) : ''}</span>
       <button class="ghost small ev-del">删除</button>`;
     li.querySelector('.ev-del').addEventListener('click', () => { data.events = data.events.filter(x => x.id !== ev.id); renderEvents(); markDirty(); });
     list.appendChild(li);
   }
+  const btn = $('btnClearOverdueEvents');
+  if (btn) btn.textContent = pastCount ? `🗑 一键清除过期活动（${pastCount} 条）` : '🗑 一键清除过期活动';
 }
 $('btnAddEvent').addEventListener('click', () => {
   const title = $('evTitle').value.trim();
   const date = $('evDate').value || todayKey();
   if (!title) { $('evTitle').focus(); return; }
   data.events.push({
-    id: uid(), title, date, time: $('evTime').value || null,
+    id: uid(), title, date, time: $('evTime').value || null, location: $('evLocation').value.trim() || null,
     reminders: normReminders(parsePoints($('evPoints').value), parseRepeat($('evRepStart'), $('evRepEvery')))
   });
-  $('evTitle').value = ''; $('evTime').value = ''; $('evPoints').value = ''; $('evRepStart').value = ''; $('evRepEvery').value = '';
+  $('evTitle').value = ''; $('evTime').value = ''; $('evLocation').value = ''; $('evPoints').value = ''; $('evRepStart').value = ''; $('evRepEvery').value = '';
   renderEvents(); markDirty();
+});
+
+$('btnClearOverdueEvents').addEventListener('click', () => {
+  const now = new Date();
+  const nowKey = dateKey(now);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const before = data.events.length;
+  data.events = data.events.filter(ev => !(ev.date < nowKey || (ev.date === nowKey && ev.time && toMinutes(ev.time) != null && toMinutes(ev.time) < nowMin)));
+  const removed = before - data.events.length;
+  renderEvents();
+  if (removed) { markDirty(); toast('✅ 已清除 ' + removed + ' 条过期活动'); }
+  else toast('没有过期活动');
 });
 
 // ---- 待办 ----
 let todoDate = todayKey();
 function bindTodoTab() {
   $('todoDate').value = todoDate;
-  $('todoDate').addEventListener('change', (e) => { todoDate = e.target.value || todayKey(); refreshTodoList(); });
+  // 日期只用于"添加到哪天"，列表固定显示全部待办
+  $('todoDate').addEventListener('change', (e) => { todoDate = e.target.value || todayKey(); });
   $('btnAddTodo').addEventListener('click', addTodo);
   $('todoText').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
 }
+function isTodoOverdue(date, deadline) {
+  const now = new Date();
+  const nowKey = dateKey(now);
+  if (date < nowKey) return true;
+  if (date === nowKey && deadline) {
+    const n = now.getHours() * 60 + now.getMinutes();
+    return toMinutes(deadline) != null && toMinutes(deadline) < n;
+  }
+  return false;
+}
 function refreshTodoList() {
   const list = $('todoList');
-  $('todoDateLabel').textContent = `${todoDate} 周${weekdayCN(todoDate)}`;
-  const todos = data.todos[todoDate] || [];
+  const all = [];
+  for (const k of Object.keys(data.todos || {})) {
+    for (const t of (data.todos[k] || [])) all.push({ date: k, t, overdue: isTodoOverdue(k, t.deadline) });
+  }
+  all.sort((a, b) => (Number(b.overdue) - Number(a.overdue)) || a.date.localeCompare(b.date) || (a.t.deadline || '99:99').localeCompare(b.t.deadline || '99:99'));
   list.innerHTML = '';
-  if (!todos.length) { list.innerHTML = '<li class="txt" style="color:#9aa1b2">这一天暂无待办</li>'; return; }
-  todos.forEach((t) => {
+  if (!all.length) { list.innerHTML = '<li class="txt" style="color:#9aa1b2">暂无待办</li>'; return; }
+  let overdueCount = 0;
+  for (const item of all) {
+    const { date, t, overdue } = item;
+    if (overdue && !t.done) overdueCount++;
     const li = document.createElement('li');
+    const color = (overdue && !t.done) ? ' style="color:#d23c2f"' : '';
     li.innerHTML = `<input type="checkbox" ${t.done ? 'checked' : ''} class="t-done">
-      <span class="txt ${t.done ? 'done' : ''}">${esc(t.text)}${t.deadline ? '  ⏰' + esc(t.deadline) : ''}${fmtPoints(t.reminders) ? '（' + fmtPoints(t.reminders) + '）' : ''}</span>
+      <span class="txt ${t.done ? 'done' : ''}"${color}>${(overdue && !t.done) ? '⏰已过期 ' : ''}${esc(date)}${t.deadline ? ' ⏰' + esc(t.deadline) : ''} · ${esc(t.text)}${fmtPoints(t.reminders) ? '（' + fmtPoints(t.reminders) + '）' : ''}</span>
       <button class="ghost small t-del">删除</button>`;
     li.querySelector('.t-done').addEventListener('change', (e) => { t.done = e.target.checked; refreshTodoList(); markDirty(); });
     li.querySelector('.t-del').addEventListener('click', () => {
-      data.todos[todoDate] = data.todos[todoDate].filter(x => x.id !== t.id);
-      if (!data.todos[todoDate].length) delete data.todos[todoDate];
+      data.todos[date] = data.todos[date].filter(x => x.id !== t.id);
+      if (!data.todos[date].length) delete data.todos[date];
       refreshTodoList(); markDirty();
     });
     list.appendChild(li);
-  });
+  }
+  const btn = $('btnClearOverdueTodos');
+  if (btn) btn.textContent = overdueCount ? `🗑 一键清除过期待办（${overdueCount} 条）` : '🗑 一键清除过期待办';
 }
 function addTodo() {
   const text = $('todoText').value.trim();
@@ -287,6 +335,21 @@ function addTodo() {
   $('todoText').value = ''; $('tdTime').value = ''; $('tdPoints').value = ''; $('tdRepStart').value = ''; $('tdRepEvery').value = '';
   refreshTodoList(); markDirty();
 }
+$('btnClearOverdueTodos').addEventListener('click', () => {
+  const now = new Date();
+  const nowKey = dateKey(now);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  let removed = 0;
+  for (const k of Object.keys(data.todos)) {
+    const before = data.todos[k].length;
+    data.todos[k] = data.todos[k].filter(t => !(k < nowKey || (k === nowKey && t.deadline && toMinutes(t.deadline) != null && toMinutes(t.deadline) < nowMin)));
+    removed += before - data.todos[k].length;
+    if (!data.todos[k].length) delete data.todos[k];
+  }
+  refreshTodoList();
+  if (removed) { markDirty(); toast('✅ 已清除 ' + removed + ' 条过期待办'); }
+  else toast('没有过期待办');
+});
 
 // ---- 倒数日 ----
 function renderCountdowns() {

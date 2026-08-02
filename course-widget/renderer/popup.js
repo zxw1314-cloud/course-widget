@@ -108,7 +108,8 @@ function renderEvents() {
   events.forEach((e) => {
     const el = document.createElement('div');
     el.className = 'item event';
-    el.innerHTML = `<span class="tm" style="color:#d23c2f">${e.time ? esc(e.time) : '全天'}</span><span class="txt">${esc(e.title)}</span><button class="del e-del">🗑</button>`;
+    const eloc = e.location ? ` <span style="color:#8a91a5;font-size:11px">📍${esc(e.location)}</span>` : '';
+    el.innerHTML = `<span class="tm" style="color:#d23c2f">${e.time ? esc(e.time) : '全天'}</span><span class="txt">${esc(e.title)}${eloc}</span><button class="del e-del">🗑</button>`;
     el.querySelector('.e-del').addEventListener('click', () => {
       data.events = data.events.filter(x => x.id !== e.id);
       save(); renderEvents();
@@ -134,10 +135,10 @@ function addEvent() {
   const title = $('eTitle').value.trim();
   if (!title) return;
   data.events.push({
-    id: uid(), title, date: DATE, time: $('eTime').value || null,
+    id: uid(), title, date: DATE, time: $('eTime').value || null, location: $('eLocation').value.trim() || null,
     reminders: normReminders(parsePoints($('ePoints').value), parseRepeat($('eRepStart'), $('eRepEvery')))
   });
-  $('eTitle').value = ''; $('eTime').value = ''; $('ePoints').value = ''; $('eRepStart').value = ''; $('eRepEvery').value = '';
+  $('eTitle').value = ''; $('eTime').value = ''; $('eLocation').value = ''; $('ePoints').value = ''; $('eRepStart').value = ''; $('eRepEvery').value = '';
   save(); renderEvents();
 }
 

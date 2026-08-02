@@ -72,7 +72,7 @@ function dayItems(date, isThisWeek) {
   }
   for (const ev of data.events) {
     if (ev.date !== date) continue;
-    list.push({ kind: 'event', startMin: toMinutes(ev.time), time: ev.time || '', name: ev.title, meta: '', done: false });
+    list.push({ kind: 'event', startMin: toMinutes(ev.time), time: ev.time || '', name: ev.title, loc: ev.location || '', done: false });
   }
   list.sort((a, b) => (a.startMin == null ? 1440 : a.startMin) - (b.startMin == null ? 1440 : b.startMin));
   return list;
@@ -95,7 +95,7 @@ function renderWeek(containerId, startDate, count, isThisWeek, todayKey) {
       itemsHtml = '<div class="ditems">' + items.slice(0, 12).map(it => {
         const cls = 'it ' + it.kind + (it.done ? ' done' : '') + (it.current ? ' now' : '') + (it.merged ? ' merged m-' + (it.count || 2) : '');
         const tm = it.time ? `<span class="tm">${esc(it.time)}</span>` : '';
-        const loc = (it.kind === 'course' && it.loc) ? `<span class="loc"${it.teacher ? ` title="${esc(it.teacher)}"` : ''}>📍 ${esc(it.loc)}</span>` : '';
+        const loc = (it.kind !== 'todo' && it.loc) ? `<span class="loc"${it.teacher ? ` title="${esc(it.teacher)}"` : ''}>📍 ${esc(it.loc)}</span>` : '';
         const titleAttr = (it.kind === 'course' && it.full && it.full !== it.name) ? ` title="${esc(it.full)}"` : '';
         const style = it.color ? ` style="background:${hexToRgba(it.color, 0.16)};border-left:3px solid ${hexToRgba(it.color, 0.85)}"` : '';
         let body;
