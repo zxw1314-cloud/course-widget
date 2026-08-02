@@ -351,7 +351,12 @@ function todayPayload() {
   courses.sort((a, b) => a.period - b.period);
   const todos = (data.todos[tk] || []).map(t => ({ text: t.text, deadline: t.deadline, done: !!t.done }));
   const events = data.events.filter(e => e.date === tk).map(e => ({ title: e.title, time: e.time || null, location: e.location || null }));
-  const countdowns = (data.countdowns || []).filter(c => c.date === tk).map(c => ({ title: c.title, time: c.time || null, location: c.location || null }));
+  const todayMid = new Date(now); todayMid.setHours(0, 0, 0, 0);
+  const countdowns = (data.countdowns || [])
+    .filter(c => c.date && c.date >= tk)
+    .map(c => ({ title: c.title, time: c.time || null, location: c.location || null, date: c.date, days: Math.round((parseDateKey(c.date) - todayMid) / 86400000) }))
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 3);
   return { date: tk, weekday: '周' + ['日','一','二','三','四','五','六'][now.getDay()], courses, todos, events, countdowns };
 }
 function handleMobileRequest(req, res) {

@@ -53,7 +53,7 @@ button.act:disabled { opacity: .5; }
     <div class="card"><h2>📚 课程</h2><div id="cList"></div></div>
     <div class="card"><h2>✅ 待办</h2><div id="tList"></div></div>
     <div class="card"><h2>📅 活动</h2><div id="eList"></div></div>
-    <div class="card"><h2>🎯 今日倒数</h2><div id="cdList"></div></div>
+    <div class="card"><h2>🎯 倒数日（最近）</h2><div id="cdList"></div></div>
   </div>
 
   <div id="panelAdd" class="panel">
@@ -118,7 +118,7 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function
 function loadToday() {
   api('/api/today').then(function(r){ if (r.status === 401) { localStorage.removeItem(TOKEN_KEY); boot(); return; } return r.json(); }).then(function(d){
     if (!d) return;
-    $('todaySub').textContent = d.date + ' ' + d.weekday + (d.countdowns && d.countdowns.length ? ' · 🎯' + d.countdowns.map(function(c){ return c.title + (c.time ? ' ' + c.time : ''); }).join('、') : '');
+    $('todaySub').textContent = d.date + ' ' + d.weekday + (d.countdowns && d.countdowns.length ? ' · 🎯' + d.countdowns.map(function(c){ return c.title + (c.days === 0 ? '(今天)' : '(+' + c.days + '天)'); }).join('、') : '');
     var cList = $('cList'), tList = $('tList'), eList = $('eList');
     cList.innerHTML = (d.courses && d.courses.length) ? d.courses.map(function(c){
       return '<div class="item"><span class="tm">' + esc(c.start) + '</span><span class="txt">' + esc(c.abbr || c.name) + '</span>' + (c.location ? '<span class="loc">📍' + esc(c.location) + '</span>' : '') + '</div>';
@@ -130,8 +130,9 @@ function loadToday() {
       return '<div class="item"><span class="tm">' + (e.time ? esc(e.time) : '全天') + '</span><span class="txt">' + esc(e.title) + '</span>' + (e.location ? '<span class="loc">📍' + esc(e.location) + '</span>' : '') + '</div>';
     }).join('') : '<div class="empty">暂无活动</div>';
     $('cdList').innerHTML = (d.countdowns && d.countdowns.length) ? d.countdowns.map(function(c){
-      return '<div class="item"><span class="tm">' + (c.time ? esc(c.time) : '今天') + '</span><span class="txt">' + esc(c.title) + '</span>' + (c.location ? '<span class="loc">📍' + esc(c.location) + '</span>' : '') + '</div>';
-    }).join('') : '<div class="empty">无</div>';
+      var label = c.days === 0 ? '就是今天' : ('还有 ' + c.days + ' 天');
+      return '<div class="item"><span class="tm">' + esc(label) + '</span><span class="txt">' + esc(c.title) + (c.time ? ' 🕒' + esc(c.time) : '') + '</span>' + (c.location ? '<span class="loc">📍' + esc(c.location) + '</span>' : '') + '</div>';
+    }).join('') : '<div class="empty">暂无倒数日</div>';
   }).catch(function(){ $('cList').innerHTML = '<div class="empty">连接电脑失败，稍后重试</div>'; });
 }
 
