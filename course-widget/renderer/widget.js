@@ -8,6 +8,16 @@ function toMinutes(t) { if (!t) return null; const p = t.split(':').map(Number);
 function parseDateKey(key) { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d); }
 function mondayOf(d) { const x = new Date(d); const w = x.getDay() === 0 ? 7 : x.getDay(); x.setDate(x.getDate() - (w - 1)); x.setHours(0, 0, 0, 0); return x; }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function hexToRgba(hex, alpha) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + alpha + ')';
+}
+function isNowBetween(start, end) {
+  const d = new Date(); const n = d.getHours() * 60 + d.getMinutes();
+  return n >= toMinutes(start) && n < toMinutes(end);
+}
 
 function currentWeek() {
   if (!data.settings.semesterStart) return null;
@@ -32,7 +42,12 @@ function dayItems(date, isThisWeek) {
       if (c.day !== wk || !weekMatches(c, week)) continue;
       const p = data.periods.find(x => x.index === c.period);
       if (!p) continue;
-      list.push({ kind: 'course', startMin: toMinutes(p.start), time: p.start + '~' + p.end, name: c.name, meta: c.location || '', done: false });
+      list.push({
+        kind: 'course', startMin: toMinutes(p.start), time: p.start + '~' + p.end,
+        name: c.name, meta: [c.location, c.teacher].filter(Boolean).join(' ｜ ') || '',
+        done: false, color: c.color || null,
+        current: date === dateKey(new Date()) && isNowBetween(p.start, p.end)
+      });
     }
   }
   for (const t of (data.todos[date] || [])) {
@@ -61,14 +76,15 @@ function renderWeek(containerId, startDate, count, isThisWeek, todayKey) {
       itemsHtml = '<div class="empty">—</div>';
     } else {
       itemsHtml = '<div class="ditems">' + items.slice(0, 12).map(it => {
-        const cls = 'it ' + it.kind + (it.done ? ' done' : '');
+        const cls = 'it ' + it.kind + (it.done ? ' done' : '') + (it.current ? ' now' : '');
         const tm = it.time ? `<span class="tm">${esc(it.time)}</span>` : '';
         const meta = it.meta ? ' ' + esc(it.meta) : '';
-        return `<div class="${cls}">${tm}${esc(it.name)}${meta}</div>`;
+        const style = it.color ? ` style="background:${hexToRgba(it.color, 0.16)};border-left:3px solid ${hexToRgba(it.color, 0.85)}"` : '';
+        return `<div class="${cls}"${style}>${tm}${esc(it.name)}${meta}</div>`;
       }).join('') + (items.length > 12 ? `<div class="it" style="color:#7d86a3">+${items.length - 12}</div>` : '') + '</div>';
     }
-    col.innerHTML = head + itemsHtml;
-    col.addEventListener('click', () => window.api.openPopup(key));
+    col.innerHTML = head + itemsHtml + `<button class="add" title="查看/添加 ${key} 的安排">+</button>`;
+    col.querySelector('.add').addEventListener('click', () => window.api.openPopup(key));
     box.appendChild(col);
   }
 }
@@ -96,40 +112,148 @@ function render() {
   if (todoToday) parts.push(todoToday + '待办');
   if (evToday) parts.push(evToday + '活动');
   $('summary').textContent = '今天：' + (parts.join(' · ') || '无安排');
+  renderStatus();
+  renderCountdowns();
 }
 
+function renderStatus() {
+  const now = new Date();
+  const wk = weekdayIndex(now);
+  const week = currentWeek();
+  const n = now.getHours() * 60 + now.getMinutes();
+  const today = [];
+  for (const c of data.courses) {
+    if (c.day !== wk || !weekMatches(c, week)) continue;
+    const p = data.periods.find(x => x.index === c.period);
+    if (!p) continue;
+    today.push({ c, p, startMin: toMinutes(p.start), endMin: toMinutes(p.end) });
+  }
+  today.sort((a, b) => a.startMin - b.startMin);
+  let text = '';
+  if (!today.length) {
+    text = '📥 今天没有课';
+  } else {
+    const cur = today.find(x => n >= x.startMin && n < x.endMin);
+    if (cur) {
+      text = `🔔 现在：${cur.c.name}${cur.c.location ? ' ' + cur.c.location : ''}（${cur.p.start}~${cur.p.end}）`;
+    } else {
+      const next = today.find(x => x.startMin > n);
+      if (next) {
+        text = `⏰ 下节：${next.c.name}${next.c.location ? ' ' + next.c.location : ''} ${next.p.start}（还有 ${next.startMin - n} 分钟）`;
+      } else {
+        text = '📥 今天的课已结束';
+      }
+    }
+  }
+  const el = $('status');
+  if (el) el.textContent = text;
+}
 
-// 选择性点击穿透：空白区域让鼠标穿透到桌面，日期格子/按钮保留交互
+function renderCountdowns() {
+  const box = $('cdstrip');
+  const enabled = data.settings && data.settings.showCountdown !== false;
+  const list = (data.countdowns || []).filter(cd => cd && cd.date);
+  if (!enabled || !list.length) { box.style.display = 'none'; return; }
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const items = list
+    .map(cd => {
+      const t = parseDateKey(cd.date); t.setHours(0, 0, 0, 0);
+      return { cd, days: Math.round((t - today) / 86400000) };
+    })
+    .filter(x => x.days >= 0)
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 3);
+  if (!items.length) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  box.innerHTML = items.map(x => {
+    const color = x.cd.color ? ` style="color:${esc(x.cd.color)}"` : '';
+    const label = x.days === 0 ? '就是今天' : `还有 ${x.days} 天`;
+    return `<span class="cd"${color}>🎯 ${esc(x.cd.title)} · ${label}</span>`;
+  }).join('');
+}
+
+// ---------- 选择性点击穿透：只保留 14 个加号 / 移动手柄 / 缩放手柄 / 右上角按钮 可交互，其余全部穿透到桌面 ----------
 let clickThroughOn = false;
+let dragging = false;
+function isInteractive(el) {
+  return !!(el && el.closest && el.closest('.add, button, .mv, .rz'));
+}
 document.addEventListener('mousemove', (e) => {
-  const t = e.target;
-  const interactive = t && t.closest && t.closest('.day, button');
-  const want = !interactive;
+  if (dragging) return;
+  const want = !isInteractive(e.target);
   if (want !== clickThroughOn) {
     clickThroughOn = want;
     if (window.api.setClickThrough) window.api.setClickThrough(want);
   }
 });
 document.addEventListener('mouseleave', () => {
+  if (dragging) return;
   if (!clickThroughOn) { clickThroughOn = true; if (window.api.setClickThrough) window.api.setClickThrough(true); }
 });
 window.__ctState = () => clickThroughOn;
-let resizeTimer = null;
-function scheduleResize() {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    const h = Math.min(document.body.scrollHeight + 4, Math.floor(window.screen.availHeight * 0.8));
-    window.api.resizeWidget(null, h);
-  }, 150);
+
+// ---------- 移动 / 缩放拖拽 ----------
+let drag = null;
+function beginDrag(e, mode, edge) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  e.preventDefault();
+  dragging = true;
+  drag = {
+    mode, edge,
+    start: { x: window.screenX, y: window.screenY, w: window.outerWidth, h: window.outerHeight, mx: e.screenX, my: e.screenY }
+  };
+  try { e.target.setPointerCapture(e.pointerId); } catch (err) {}
+  document.addEventListener('pointermove', onDragMove);
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+}
+function onDragMove(e) {
+  if (!drag) return;
+  const s = drag.start;
+  const dx = e.screenX - s.mx;
+  const dy = e.screenY - s.my;
+  const b = { x: s.x, y: s.y };
+  if (drag.mode === 'move') {
+    b.x = s.x + dx; b.y = s.y + dy;
+  } else {
+    const edge = drag.edge || '';
+    if (edge.includes('l')) { b.x = s.x + dx; b.width = s.w - dx; }
+    if (edge.includes('r')) b.width = s.w + dx;
+    if (edge.includes('t')) { b.y = s.y + dy; b.height = s.h - dy; }
+    if (edge.includes('b')) b.height = s.h + dy;
+  }
+  if (window.api.setWidgetBounds) window.api.setWidgetBounds(b);
+}
+function endDrag() {
+  dragging = false;
+  drag = null;
+  document.removeEventListener('pointermove', onDragMove);
+  document.removeEventListener('pointerup', endDrag);
+  document.removeEventListener('pointercancel', endDrag);
+  if (window.api.setWidgetBounds) window.api.setWidgetBounds({ persist: true });
 }
 
+document.querySelectorAll('.rz').forEach(z => {
+  z.addEventListener('pointerdown', (e) => beginDrag(e, 'resize', z.dataset.edge));
+});
+$('btnMove').addEventListener('pointerdown', (e) => beginDrag(e, 'move', null));
 $('btnHide').addEventListener('click', () => window.api.hideWidget());
 $('btnGear').addEventListener('click', () => window.api.openSetup());
 
 (async () => {
   data = await window.api.getData();
+  if (window.api.onBellRing) {
+    window.api.onBellRing((kind) => {
+      const s = (data && data.settings) || {};
+      playChime(s.bellPreset || 'school-bell', s.bellVolume != null ? s.bellVolume : 0.8);
+    });
+  }
   render();
-  scheduleResize();
-  setInterval(async () => { data = await window.api.getData(); render(); scheduleResize(); }, 30000);
-  window.addEventListener('focus', async () => { data = await window.api.getData(); render(); scheduleResize(); });
+  // 首次启动（未持久化过高度）按内容一次性定高并持久化；之后高度只由手动缩放决定，不再自动调整
+  if (!data.settings.widgetHeight && window.api.setWidgetBounds) {
+    const h = Math.min(document.body.scrollHeight + 4, Math.floor(window.screen.availHeight * 0.8));
+    window.api.setWidgetBounds({ height: Math.round(h), persist: true });
+  }
+  setInterval(async () => { data = await window.api.getData(); render(); }, 30000);
+  window.addEventListener('focus', async () => { data = await window.api.getData(); render(); });
 })();

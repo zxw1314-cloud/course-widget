@@ -6,13 +6,14 @@ contextBridge.exposeInMainWorld('api', {
   openPopup: (date) => ipcRenderer.invoke('ui:openPopup', date),
   showWidget: () => ipcRenderer.invoke('widget:show'),
   hideWidget: () => ipcRenderer.invoke('widget:hide'),
-  resizeWidget: (w, h) => ipcRenderer.invoke('widget:resize', w, h),
-  repositionWidget: () => ipcRenderer.invoke('widget:reposition'),
+  setWidgetBounds: (opts) => ipcRenderer.invoke('widget:setBounds', opts),
+  snapCorner: (corner) => ipcRenderer.invoke('widget:snapCorner', corner),
   setClickThrough: (on) => ipcRenderer.invoke('widget:clickThrough', on),
   setAutostart: (on) => ipcRenderer.invoke('settings:autostart', on),
   testNotify: () => ipcRenderer.invoke('notify:test'),
   exportData: () => ipcRenderer.invoke('data:export'),
   importData: () => ipcRenderer.invoke('data:import'),
   logError: (msg) => ipcRenderer.send('log:error', msg),
+  onBellRing: (cb) => { const h = (_e, kind) => cb(kind); ipcRenderer.on('bell:ring', h); return () => ipcRenderer.removeListener('bell:ring', h); },
   quit: () => ipcRenderer.invoke('app:quit')
 });

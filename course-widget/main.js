@@ -1,7 +1,6 @@
 const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, dialog, screen, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
 
 const APP_ID = 'com.course-widget.desktop';
 app.setAppUserModelId(APP_ID);
@@ -12,7 +11,6 @@ if (!gotLock) { app.quit(); }
 
 const DATA_FILE = () => path.join(app.getPath('userData'), 'data.json');
 const ICON = path.join(__dirname, 'assets', 'icon.png');
-const HELPER = path.join(__dirname, 'helper', 'WallpaperEmbed.exe');
 
 let data = defaultData();
 let setupWin = null;
@@ -34,7 +32,8 @@ function defaultData() {
     settings: {
       firstRun: true, widgetApplied: false, remindMinutes: 10,
       semesterStart: null, showWeekStrip: true, clickThrough: false, autostart: false,
-      widgetWidth: 900, widgetHeight: null, widgetCorner: 'bottomRight'
+      widgetWidth: 900, widgetHeight: null, widgetX: null, widgetY: null, widgetCorner: 'bottomRight',
+      bellEnabled: false, bellVolume: 0.8, bellPreset: 'school-bell', showCountdown: true
     },
     periods: [
       { index: 1, start: '08:00', end: '08:45' }, { index: 2, start: '09:00', end: '09:45' },
@@ -44,7 +43,8 @@ function defaultData() {
     ],
     courses: [],  // { id, name, day(1-7), period, weeks:[]|null, location, reminders:{points:[],repeat:null} }
     todos: {},    // { 'YYYY-MM-DD': [ {id, text, deadline:'HH:MM'|null, done, reminders:{points:[],repeat:null}} ] }
-    events: []    // { id, title, date, time:'HH:MM'|null, reminders:{points:[],repeat:null} }
+    events: [],   // { id, title, date, time:'HH:MM'|null, reminders:{points:[],repeat:null} }
+    countdowns: [] // { id, title, date:'YYYY-MM-DD', color:'#xxxxxx'|null }
   };
 }
 
@@ -54,7 +54,8 @@ function migrate(raw) {
   // 旧字段迁移：remindMinutes -> reminders.points
   out.courses = (out.courses || []).map(c => ({
     id: c.id, name: c.name, day: c.day, period: c.period, weeks: c.weeks || null, location: c.location || null,
-    reminders: c.reminders || normReminders(c.remindMinutes)
+    reminders: c.reminders || normReminders(c.remindMinutes),
+    teacher: c.teacher || null, color: c.color || null
   }));
   out.events = (out.events || []).map(ev => ({
     id: ev.id, title: ev.title, date: ev.date, time: ev.time || null,
@@ -66,6 +67,11 @@ function migrate(raw) {
       reminders: t.reminders || normReminders(t.remindMinutes)
     }));
   }
+  out.countdowns = (out.countdowns || [])
+    .map(cd => ({
+      id: cd.id, title: cd.title || '倒数日', date: cd.date || '', color: cd.color || null
+    }))
+    .filter(cd => !!cd.date);
   return out;
 }
 function normReminders(mins) {
@@ -101,12 +107,12 @@ function createSetupWindow() {
   return setupWin;
 }
 
-function anchorPos(w, h) {
+function anchorPos(w, h, corner) {
   const { workArea } = screen.getPrimaryDisplay();
   const margin = 20;
-  const corner = data.settings.widgetCorner || 'bottomRight';
+  const c = corner || data.settings.widgetCorner || 'bottomRight';
   const x = workArea.x + workArea.width - w - margin;
-  const y = corner === 'topRight' ? workArea.y + margin : workArea.y + workArea.height - h - margin;
+  const y = c === 'topRight' ? workArea.y + margin : workArea.y + workArea.height - h - margin;
   return { x, y };
 }
 function createWidgetWindow() {
@@ -114,7 +120,10 @@ function createWidgetWindow() {
   const { workArea } = screen.getPrimaryDisplay();
   const w = Math.min(Math.max(data.settings.widgetWidth || 900, 560), workArea.width - 40);
   const h = Math.min(data.settings.widgetHeight || 280, Math.floor(workArea.height * 0.75));
-  const pos = anchorPos(w, h);
+  let pos = { x: data.settings.widgetX, y: data.settings.widgetY };
+  if (pos.x == null || pos.y == null) pos = anchorPos(w, h);
+  pos.x = Math.min(Math.max(pos.x, workArea.x), workArea.x + workArea.width - w);
+  pos.y = Math.min(Math.max(pos.y, workArea.y), workArea.y + workArea.height - h);
   widgetWin = new BrowserWindow({
     width: w, height: h, x: pos.x, y: pos.y,
     show: false, frame: false, transparent: true, resizable: false, skipTaskbar: true,
@@ -127,26 +136,9 @@ function createWidgetWindow() {
     if (data.settings.clickThrough) widgetWin.setIgnoreMouseEvents(true, { forward: true });
   });
   widgetWin.on('close', (e) => { if (quitting) return; e.preventDefault(); widgetWin.hide(); });
-  widgetWin.on('moved', () => {
-    if (!widgetWin) return;
-    const b = widgetWin.getBounds();
-    const p = anchorPos(b.width, b.height);
-    if (Math.abs(b.x - p.x) > 4 || Math.abs(b.y - p.y) > 4) widgetWin.setPosition(p.x, p.y);
-  });
   return widgetWin;
 }
 
-function embedIntoWallpaper(win) {
-  try {
-    const buf = win.getNativeWindowHandle();
-    const hwnd = buf.length >= 8 ? buf.readBigUInt64LE(0).toString() : buf.readUInt32LE(0).toString();
-    if (!fs.existsSync(HELPER)) return;
-    const child = spawn(HELPER, [hwnd], { windowsHide: true });
-    child.on('error', (e) => console.warn('embed helper error', e.message));
-    child.stdout.on('data', (d) => console.log('[embed]', String(d).trim()));
-    child.stderr.on('data', (d) => console.warn('[embed]', String(d).trim()));
-  } catch (e) { console.warn('embed failed', e); }
-}
 
 function openPopup(date) {
   if (popupWin && popupWin.date === date) { popupWin.win.show(); popupWin.win.focus(); return; }
@@ -176,7 +168,7 @@ function rebuildTrayMenu() {
   if (!tray) return;
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '打开设置', click: () => createSetupWindow() },
-    { label: '显示桌面挂件', click: () => { if (widgetWin) { widgetWin.show(); embedIntoWallpaper(widgetWin); } else { createWidgetWindow(); } } },
+    { label: '显示桌面挂件', click: () => { if (widgetWin) widgetWin.show(); else createWidgetWindow(); } },
     { label: '隐藏桌面挂件', click: () => { if (widgetWin) widgetWin.hide(); } },
     { label: '立即检查提醒', click: () => checkReminders(true) },
     { type: 'separator' },
@@ -270,6 +262,36 @@ function checkReminders(force) {
   }
 }
 
+// ---------------- 上下课铃声 ----------------
+let bellFired = new Set();
+let bellDay = '';
+function sendBell(kind) {
+  if (!data.settings.bellEnabled) return;
+  if (widgetWin && !widgetWin.isDestroyed()) {
+    try { widgetWin.webContents.send('bell:ring', kind); } catch (e) {}
+  }
+}
+function checkBells() {
+  const now = new Date();
+  const todayKey = dateKey(now);
+  if (todayKey !== bellDay) { bellFired.clear(); bellDay = todayKey; }
+  const hm = pad(now.getHours()) + ':' + pad(now.getMinutes());
+  const wk = weekdayIndex(now);
+  const week = currentWeek();
+  for (const p of data.periods) {
+    const c = data.courses.find(x => x.day === wk && x.period === p.index && weekMatches(x, week));
+    if (!c) continue;
+    if (p.start === hm) {
+      const k = todayKey + ':p' + p.index + ':start';
+      if (!bellFired.has(k)) { bellFired.add(k); sendBell('on'); }
+    }
+    if (p.end === hm) {
+      const k = todayKey + ':p' + p.index + ':end';
+      if (!bellFired.has(k)) { bellFired.add(k); sendBell('off'); }
+    }
+  }
+}
+
 // ---------------- IPC ----------------
 ipcMain.handle('data:get', () => data);
 ipcMain.handle('data:set', (e, next) => {
@@ -284,19 +306,36 @@ ipcMain.handle('ui:openSetup', () => { createSetupWindow(); return true; });
 ipcMain.handle('ui:openPopup', (e, date) => { openPopup(String(date)); return true; });
 ipcMain.handle('widget:show', () => { createWidgetWindow(); return true; });
 ipcMain.handle('widget:hide', () => { if (widgetWin) widgetWin.hide(); return true; });
-ipcMain.handle('widget:resize', (e, w, h) => {
-  if (widgetWin) {
-    const b = widgetWin.getBounds();
-    const cw = (w != null) ? Math.max(560, Math.min(Math.round(w), 1600)) : b.width;
-    const ch = Math.max(120, Math.min(Math.round(h) || b.height, Math.floor(screen.getPrimaryDisplay().workArea.height * 0.8)));
-    const p = anchorPos(cw, ch);
-    widgetWin.setBounds({ x: p.x, y: p.y, width: cw, height: ch });
-    data.settings.widgetHeight = ch;
+ipcMain.handle('widget:setBounds', (e, opts) => {
+  if (!widgetWin) return true;
+  const o = opts || {};
+  const b = widgetWin.getBounds();
+  const { workArea } = screen.getPrimaryDisplay();
+  const maxW = Math.max(560, workArea.width - 40);
+  const maxH = Math.floor(workArea.height * 0.8);
+  let w = (o.width != null) ? Math.max(560, Math.min(Math.round(o.width), maxW)) : b.width;
+  let h = (o.height != null) ? Math.max(120, Math.min(Math.round(o.height), maxH)) : b.height;
+  let x = (o.x != null) ? o.x : b.x;
+  let y = (o.y != null) ? o.y : b.y;
+  if (o.width != null) { const rw = Math.round(o.width); if (rw !== w) x += (rw - w); }
+  if (o.height != null) { const rh = Math.round(o.height); if (rh !== h) y += (rh - h); }
+  x = Math.min(Math.max(x, workArea.x), workArea.x + workArea.width - w);
+  y = Math.min(Math.max(y, workArea.y), workArea.y + workArea.height - h);
+  widgetWin.setBounds({ x: x, y: y, width: w, height: h });
+  if (o.persist) {
+    data.settings.widgetX = x; data.settings.widgetY = y;
+    data.settings.widgetWidth = w; data.settings.widgetHeight = h;
+    saveData();
   }
   return true;
 });
-ipcMain.handle('widget:reposition', () => {
-  if (widgetWin) { const b = widgetWin.getBounds(); const p = anchorPos(b.width, b.height); widgetWin.setPosition(p.x, p.y); }
+ipcMain.handle('widget:snapCorner', (e, corner) => {
+  if (!widgetWin) return true;
+  const b = widgetWin.getBounds();
+  const p = anchorPos(b.width, b.height, corner);
+  widgetWin.setPosition(p.x, p.y);
+  data.settings.widgetX = p.x; data.settings.widgetY = p.y;
+  saveData();
   return true;
 });
 ipcMain.handle('widget:clickThrough', (e, on) => {
@@ -342,4 +381,6 @@ app.whenReady().then(() => {
     createWidgetWindow();
   }
   setInterval(() => checkReminders(false), 30000);
+  checkBells();
+  setInterval(() => checkBells(), 10000);
 });

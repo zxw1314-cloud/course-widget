@@ -46,6 +46,12 @@ ul.list li .txt { flex: 1; }
 .modal-box label input { width: 100%; margin-top: 4px; }
 .modal-box .row { margin-top: 14px; justify-content: flex-end; }
 .todo-item .done { text-decoration: line-through; color: #9aa1b2; }
+.colors { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; align-items: center; }
+.cdot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #d7dbe6; cursor: pointer; padding: 0; background: #fff; }
+.cdot.on { border-color: #4080ff; box-shadow: 0 0 0 2px rgba(64,128,255,.25); }
+.cdot.none { color: #9aa1b2; font-size: 12px; line-height: 20px; }
+.cchip { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+hr { border: none; border-top: 1px dashed #e3e6ef; margin: 10px 0; }
 </style>
 </head>
 <body>
@@ -60,6 +66,7 @@ ul.list li .txt { flex: 1; }
   <button data-tab="timetable" class="active">课表</button>
   <button data-tab="events">临时活动</button>
   <button data-tab="todos">待办</button>
+  <button data-tab="countdown">倒数日</button>
   <button data-tab="settings">设置</button>
 </nav>
 <main>
@@ -108,22 +115,48 @@ ul.list li .txt { flex: 1; }
       </div>
     </div>
   </section>
+  <section id="tab-countdown" class="hidden">
+    <div class="card">
+      <h3>添加倒数日（考试、假期等，会显示在桌面挂件上）</h3>
+      <div class="row">
+        <input id="cdTitle" placeholder="名称，如：高考" style="flex:1;min-width:140px">
+        <input id="cdDate" type="date">
+        <select id="cdColor">
+          <option value="">默认</option>
+          <option value="#77b5e8">蓝</option>
+          <option value="#67bfa4">绿</option>
+          <option value="#f6c85f">黄</option>
+          <option value="#f28b82">红</option>
+          <option value="#a88ad8">紫</option>
+        </select>
+        <button id="btnAddCountdown">添加</button>
+      </div>
+    </div>
+    <div class="card"><h3>倒数日列表</h3><ul class="list" id="countdownList"></ul></div>
+  </section>
   <section id="tab-settings" class="hidden">
     <div class="card">
       <h3>设置</h3>
       <label>默认提前提醒（分钟）<input id="setRemind" type="number" min="0" style="width:100px"></label>
       <label>开学日期（第1周周一，用于"周次"过滤）<input id="setSemester" type="date"></label>
       <label>挂件宽度（像素，560~1600）<input id="setWidth" type="number" min="560" max="1600" style="width:110px"></label>
-      <label>挂件位置
-        <select id="setCorner">
-          <option value="bottomRight">右下角</option>
-          <option value="topRight">右上角</option>
-        </select>
+      <label>挂件归位
+        <button id="btnSnapBR" type="button">贴到右下角</button>
+        <button id="btnSnapTR" type="button">贴到右上角</button>
       </label>
       <label><input id="setCompact" type="checkbox"> 挂件紧凑模式（只显示今日，节省空间）</label>
       <label><input id="setWeekStrip" type="checkbox"> 挂件显示本周日期条</label>
       <label><input id="setClickThrough" type="checkbox"> 挂件鼠标穿透（桌面点击不受影响，点日期添加待办需关闭）</label>
       <label><input id="setAutostart" type="checkbox"> 开机自启</label>
+      <label><input id="setShowCountdown" type="checkbox"> 挂件显示倒数日</label>
+      <hr>
+      <h3>上下课铃声（到点播放提示音，参考 study-desk 实现）</h3>
+      <label><input id="setBell" type="checkbox"> 启用上下课铃声</label>
+      <label>铃声 <select id="setBellPreset" style="width:180px"></select>
+        <button class="ghost small" id="btnTestBell">试听</button>
+      </label>
+      <label>音量 <input id="setBellVolume" type="range" min="0" max="100" value="80" style="width:160px;vertical-align:middle"> <span id="bellVolLabel">80%</span></label>
+      <p style="color:#9aa1b2;font-size:12px;margin:4px 0 0">到上课/下课时间播放所选铃声；原有系统通知提醒保持不变。</p>
       <div class="row">
         <button class="ghost" id="btnTestNotify">测试提醒</button>
         <button class="ghost" id="btnExport">导出备份</button>
@@ -137,7 +170,9 @@ ul.list li .txt { flex: 1; }
   <div class="modal-box">
     <h3 id="modalTitle">编辑课程</h3>
     <label>课程名 <input id="mName" placeholder="如：高等数学"></label>
+    <label>教师 <input id="mTeacher" placeholder="如：张老师（可留空）"></label>
     <label>地点 <input id="mLocation" placeholder="如：A101（可留空）"></label>
+    <label>颜色 <span id="mColors" class="colors"></span></label>
     <label>周次 <input id="mWeeks" placeholder="留空=每周；如 1-16 或 1,3,5"></label>
     <label>提醒(提前分钟,逗号分隔) <input id="mPoints" placeholder="如 10,60；留空=默认10"></label>
     <label>重复提醒：开始前 <input id="mRepStart" type="number" min="0" style="width:70px"> 分钟起，每 <input id="mRepEvery" type="number" min="1" style="width:60px"> 分钟提醒一次（留空=不重复）</label>
@@ -148,6 +183,7 @@ ul.list li .txt { flex: 1; }
     </div>
   </div>
 </div>
+<script src="chime.js"></script>
 <script src="setup.js"></script>
 </body>
 </html>

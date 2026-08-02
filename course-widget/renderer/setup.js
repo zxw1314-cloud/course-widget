@@ -41,12 +41,35 @@ function normReminders(pointsArr, repeat) {
   const pts = (pointsArr && pointsArr.length) ? pointsArr : [10];
   return { points: pts, repeat };
 }
+const COURSE_COLORS = ['#77b5e8', '#67bfa4', '#f6c85f', '#f28b82', '#a88ad8', '#5bc0d1', '#e887b0', '#8bc6a3'];
+let selectedColor = null;
+function renderColorSwatches() {
+  const box = $('mColors');
+  if (!box) return;
+  box.innerHTML = '';
+  const none = document.createElement('button');
+  none.type = 'button';
+  none.className = 'cdot none' + (!selectedColor ? ' on' : '');
+  none.title = '默认颜色';
+  none.textContent = '✕';
+  none.addEventListener('click', () => { selectedColor = null; renderColorSwatches(); });
+  box.appendChild(none);
+  for (const c of COURSE_COLORS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'cdot' + (selectedColor === c ? ' on' : '');
+    b.title = c;
+    b.style.background = c;
+    b.addEventListener('click', () => { selectedColor = c; renderColorSwatches(); });
+    box.appendChild(b);
+  }
+}
 function fmtPoints(r) { return (r && r.points && r.points.length) ? r.points.join(',') + '分钟前' : ''; }
 function fmtRepeat(r) { return (r && r.repeat) ? `重复:前${r.repeat.start}分/每${r.repeat.every}分` : ''; }
 
 async function init() {
   data = await window.api.getData();
-  bindTabs(); bindHeader(); renderPeriods(); renderGrid(); renderEvents(); renderSettings(); bindTodoTab(); refreshTodoList();
+  bindTabs(); bindHeader(); renderPeriods(); renderGrid(); renderEvents(); renderSettings(); bindTodoTab(); refreshTodoList(); renderCountdowns();
 }
 function toast(msg) { $('toast').textContent = msg; setTimeout(() => { if ($('toast').textContent === msg) $('toast').textContent = ''; }, 3000); }
 
@@ -105,7 +128,7 @@ function renderGrid() {
     for (let day = 1; day <= 7; day++) {
       const c = data.courses.find(x => x.day === day && x.period === p.index);
       html += `<td class="cell" data-day="${day}" data-period="${p.index}">
-        ${c ? `<span class="cname">${esc(c.name)}</span><span class="cmeta">${esc(c.location || '')}${c.weeks ? ' ' + formatWeeks(c.weeks) : ''}${fmtPoints(c.reminders) ? ' ' + fmtPoints(c.reminders) : ''}</span>` : ''}
+        ${c ? `<span class="cname">${c.color ? `<span class="cchip" style="background:${esc(c.color)}"></span>` : ''}${esc(c.name)}</span><span class="cmeta">${esc([c.teacher, c.location].filter(Boolean).join(' / '))}${c.weeks ? ' ' + formatWeeks(c.weeks) : ''}${fmtPoints(c.reminders) ? ' ' + fmtPoints(c.reminders) : ''}</span>` : ''}
       </td>`;
     }
     html += '</tr>';
@@ -119,7 +142,10 @@ function openEditor(day, period) {
   editing = { day, period, course: c || null };
   $('modalTitle').textContent = `${WEEKDAYS[day - 1]} 第${period}节`;
   $('mName').value = c ? c.name : '';
+  $('mTeacher').value = c ? (c.teacher || '') : '';
   $('mLocation').value = c ? (c.location || '') : '';
+  selectedColor = c ? (c.color || null) : null;
+  renderColorSwatches();
   $('mWeeks').value = c && c.weeks ? formatWeeks(c.weeks).replace(/周$/, '') : '';
   const r = (c && c.reminders) || {};
   $('mPoints').value = r.points && r.points.length ? r.points.join(',') : '';
@@ -146,7 +172,9 @@ $('mSave').addEventListener('click', () => {
   if (!name) { toast('⚠ 请先输入课程名'); $('mName').focus(); return; }
   const course = editing.course || { id: uid(), day: editing.day, period: editing.period };
   course.name = name;
+  course.teacher = $('mTeacher').value.trim() || null;
   course.location = $('mLocation').value.trim() || null;
+  course.color = selectedColor;
   course.weeks = parseWeeks($('mWeeks').value);
   course.reminders = normReminders(parsePoints($('mPoints').value), parseRepeat($('mRepStart'), $('mRepEvery')));
   if (!editing.course) data.courses.push(course);
@@ -218,6 +246,35 @@ function addTodo() {
   refreshTodoList();
 }
 
+// ---- 倒数日 ----
+function renderCountdowns() {
+  const list = $('countdownList');
+  if (!list) return;
+  const items = [...(data.countdowns || [])].sort((a, b) => a.date.localeCompare(b.date));
+  list.innerHTML = '';
+  if (!items.length) { list.innerHTML = '<li class="txt" style="color:#9aa1b2">暂无倒数日</li>'; return; }
+  for (const cd of items) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="txt">🎯 <b>${esc(cd.title)}</b> · ${cd.date}${cd.color ? ` <span style="display:inline-block;width:10px;height:10px;background:${esc(cd.color)};border-radius:50%;vertical-align:middle"></span>` : ''}</span>
+      <button class="ghost small cd-del">删除</button>`;
+    li.querySelector('.cd-del').addEventListener('click', () => {
+      data.countdowns = data.countdowns.filter(x => x.id !== cd.id);
+      renderCountdowns();
+    });
+    list.appendChild(li);
+  }
+}
+$('btnAddCountdown').addEventListener('click', () => {
+  const title = $('cdTitle').value.trim();
+  const date = $('cdDate').value;
+  if (!title || !date) { toast('⚠ 请填写名称和日期'); return; }
+  if (!data.countdowns) data.countdowns = [];
+  data.countdowns.push({ id: uid(), title, date, color: $('cdColor').value || null });
+  $('cdTitle').value = ''; $('cdDate').value = ''; $('cdColor').value = '';
+  renderCountdowns();
+  toast('✅ 已添加倒数日');
+});
+
 // ---- 设置 ----
 function renderSettings() {
   $('setRemind').value = data.settings.remindMinutes;
@@ -227,19 +284,48 @@ function renderSettings() {
   $('setWeekStrip').checked = !!data.settings.showWeekStrip;
   $('setClickThrough').checked = !!data.settings.clickThrough;
   $('setAutostart').checked = !!data.settings.autostart;
+  $('setShowCountdown').checked = !!data.settings.showCountdown;
+  $('setBell').checked = !!data.settings.bellEnabled;
+  const presetSel = $('setBellPreset');
+  presetSel.innerHTML = '';
+  for (const p of CHIME_PRESETS) {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.label;
+    presetSel.appendChild(opt);
+  }
+  presetSel.value = data.settings.bellPreset || 'school-bell';
+  const vol = Math.round((data.settings.bellVolume != null ? data.settings.bellVolume : 0.8) * 100);
+  $('setBellVolume').value = vol;
+  $('bellVolLabel').textContent = vol + '%';
 }
 $('setRemind').addEventListener('change', (e) => { data.settings.remindMinutes = Math.max(0, parseInt(e.target.value, 10) || 0); });
 $('setSemester').addEventListener('change', (e) => { data.settings.semesterStart = e.target.value || null; });
-$('setWidth').addEventListener('change', (e) => { data.settings.widgetWidth = Math.min(1600, Math.max(560, parseInt(e.target.value, 10) || 900)); });
+$('setWidth').addEventListener('change', async (e) => {
+  data.settings.widgetWidth = Math.min(1600, Math.max(560, parseInt(e.target.value, 10) || 900));
+  if (window.api.setWidgetBounds) await window.api.setWidgetBounds({ width: data.settings.widgetWidth });
+});
+if ($('btnSnapBR')) $('btnSnapBR').addEventListener('click', async () => { if (window.api.snapCorner) await window.api.snapCorner('bottomRight'); });
+if ($('btnSnapTR')) $('btnSnapTR').addEventListener('click', async () => { if (window.api.snapCorner) await window.api.snapCorner('topRight'); });
 $('setCompact').addEventListener('change', (e) => { data.settings.widgetCompact = e.target.checked; });
 $('setWeekStrip').addEventListener('change', (e) => { data.settings.showWeekStrip = e.target.checked; });
 $('setClickThrough').addEventListener('change', async (e) => { data.settings.clickThrough = e.target.checked; await window.api.setClickThrough(e.target.checked); });
 $('setAutostart').addEventListener('change', async (e) => { data.settings.autostart = e.target.checked; await window.api.setAutostart(e.target.checked); });
+$('setShowCountdown').addEventListener('change', (e) => { data.settings.showCountdown = e.target.checked; });
+$('setBell').addEventListener('change', (e) => { data.settings.bellEnabled = e.target.checked; });
+$('setBellPreset').addEventListener('change', (e) => { data.settings.bellPreset = e.target.value; });
+$('setBellVolume').addEventListener('input', (e) => {
+  const v = parseInt(e.target.value, 10) || 0;
+  data.settings.bellVolume = v / 100;
+  $('bellVolLabel').textContent = v + '%';
+});
+$('btnTestBell').addEventListener('click', () => {
+  playChime(data.settings.bellPreset || 'school-bell', data.settings.bellVolume != null ? data.settings.bellVolume : 0.8);
+});
 $('btnTestNotify').addEventListener('click', () => window.api.testNotify());
 $('btnExport').addEventListener('click', async () => { const r = await window.api.exportData(); toast(r.ok ? `✅ 已导出：${r.path}` : '已取消'); });
 $('btnImport').addEventListener('click', async () => {
   const r = await window.api.importData();
-  if (r.ok) { data = await window.api.getData(); renderPeriods(); renderGrid(); renderEvents(); renderSettings(); refreshTodoList(); toast(`✅ 已导入：${r.path}`); }
+  if (r.ok) { data = await window.api.getData(); renderPeriods(); renderGrid(); renderEvents(); renderCountdowns(); renderSettings(); refreshTodoList(); toast(`✅ 已导入：${r.path}`); }
   else if (r.error) toast('❌ ' + r.error);
 });
 

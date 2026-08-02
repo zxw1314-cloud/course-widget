@@ -8,6 +8,12 @@ function weekdayIndex(d) { const w = d.getDay(); return w === 0 ? 7 : w; }
 function toMinutes(t) { if (!t) return null; const p = t.split(':').map(Number); return p[0] * 60 + p[1]; }
 function parseDateKey(key) { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function hexToRgba(hex, alpha) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + alpha + ')';
+}
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function parsePoints(s) { return (s || '').split(/[,，、]/).map(x => parseInt(x, 10)).filter(x => !isNaN(x) && x >= 0); }
 function parseRepeat(startEl, everyEl) {
@@ -42,7 +48,7 @@ function dayCourses() {
     if (c.day !== wk || !weekMatches(c, week)) continue;
     const p = data.periods.find(x => x.index === c.period);
     if (!p) continue;
-    out.push({ time: p.start + '~' + p.end, startMin: toMinutes(p.start), name: c.name, loc: c.location });
+    out.push({ time: p.start + '~' + p.end, startMin: toMinutes(p.start), name: c.name, loc: c.location, teacher: c.teacher || null, color: c.color || null });
   }
   out.sort((a, b) => (a.startMin == null ? 1440 : a.startMin) - (b.startMin == null ? 1440 : b.startMin));
   return out;
@@ -59,7 +65,12 @@ function render() {
   for (const c of courses) {
     const el = document.createElement('div');
     el.className = 'item course';
-    el.innerHTML = `<span class="tm">${esc(c.time)}</span><span class="txt">${esc(c.name)}</span>${c.loc ? `<span style="color:#8a91a5;font-size:11px">${esc(c.loc)}</span>` : ''}`;
+    const meta = [c.loc, c.teacher].filter(Boolean).join(' · ');
+    el.innerHTML = `<span class="tm">${esc(c.time)}</span><span class="txt">${esc(c.name)}</span>${meta ? `<span style="color:#8a91a5;font-size:11px">${esc(meta)}</span>` : ''}`;
+    if (c.color) {
+      el.style.background = hexToRgba(c.color, 0.12);
+      el.style.borderLeft = '3px solid ' + hexToRgba(c.color, 0.85);
+    }
     cb.appendChild(el);
   }
 
