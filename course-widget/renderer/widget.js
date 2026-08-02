@@ -42,9 +42,11 @@ function dayItems(date, isThisWeek) {
       if (c.day !== wk || !weekMatches(c, week)) continue;
       const p = data.periods.find(x => x.index === c.period);
       if (!p) continue;
+      const abbrMap = data.settings.courseAbbr || {};
       list.push({
-        kind: 'course', startMin: toMinutes(p.start), time: p.start + '~' + p.end,
-        name: c.name, meta: [c.location, c.teacher].filter(Boolean).join(' ｜ ') || '',
+        kind: 'course', startMin: toMinutes(p.start), time: p.start,
+        name: abbrMap[c.name] || c.name, full: c.name,
+        loc: c.location || '', teacher: c.teacher || '',
         done: false, color: c.color || null,
         current: date === dateKey(new Date()) && isNowBetween(p.start, p.end)
       });
@@ -78,9 +80,10 @@ function renderWeek(containerId, startDate, count, isThisWeek, todayKey) {
       itemsHtml = '<div class="ditems">' + items.slice(0, 12).map(it => {
         const cls = 'it ' + it.kind + (it.done ? ' done' : '') + (it.current ? ' now' : '');
         const tm = it.time ? `<span class="tm">${esc(it.time)}</span>` : '';
-        const meta = it.meta ? ' ' + esc(it.meta) : '';
+        const loc = (it.kind === 'course' && it.loc) ? `<span class="loc"${it.teacher ? ` title="${esc(it.teacher)}"` : ''}>📍 ${esc(it.loc)}</span>` : '';
+        const titleAttr = (it.kind === 'course' && it.full && it.full !== it.name) ? ` title="${esc(it.full)}"` : '';
         const style = it.color ? ` style="background:${hexToRgba(it.color, 0.16)};border-left:3px solid ${hexToRgba(it.color, 0.85)}"` : '';
-        return `<div class="${cls}"${style}>${tm}${esc(it.name)}${meta}</div>`;
+        return `<div class="${cls}"${titleAttr}${style}>${tm}${esc(it.name)}${loc}</div>`;
       }).join('') + (items.length > 12 ? `<div class="it" style="color:#7d86a3">+${items.length - 12}</div>` : '') + '</div>';
     }
     col.innerHTML = head + itemsHtml + `<button class="add" title="查看/添加 ${key} 的安排">+</button>`;
@@ -137,13 +140,15 @@ function renderStatus() {
   if (!today.length) {
     text = '📥 今天没有课';
   } else {
+    const abbrMap = data.settings.courseAbbr || {};
+    const abbrOf = (n) => abbrMap[n] || n;
     const cur = today.find(x => n >= x.startMin && n < x.endMin);
     if (cur) {
-      text = `🔔 现在：${cur.c.name}${cur.c.location ? ' ' + cur.c.location : ''}（${cur.p.start}~${cur.p.end}）`;
+      text = `🔔 现在：${abbrOf(cur.c.name)}${cur.c.location ? ' ' + cur.c.location : ''}（${cur.p.start}~${cur.p.end}）`;
     } else {
       const next = today.find(x => x.startMin > n);
       if (next) {
-        text = `⏰ 下节：${next.c.name}${next.c.location ? ' ' + next.c.location : ''} ${next.p.start}（还有 ${next.startMin - n} 分钟）`;
+        text = `⏰ 下节：${abbrOf(next.c.name)}${next.c.location ? ' ' + next.c.location : ''} ${next.p.start}（还有 ${next.startMin - n} 分钟）`;
       } else {
         text = '📥 今天的课已结束';
       }

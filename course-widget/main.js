@@ -14,6 +14,7 @@ const ICON = path.join(__dirname, 'assets', 'icon.png');
 
 let data = defaultData();
 let setupWin = null;
+let setupDirty = false; // 设置窗口是否有未保存修改（渲染进程上报），关闭时提醒保存
 let widgetWin = null;
 let popupWin = null;
 let tray = null;
@@ -32,6 +33,7 @@ function defaultData() {
     settings: {
       firstRun: true, widgetApplied: false, remindMinutes: 10,
       semesterStart: null, showWeekStrip: true, clickThrough: false, autostart: false, widgetOpacity: 0.66,
+      courseAbbr: {},  // { 课程全名: 简写 } 挂件显示用
       widgetWidth: 900, widgetHeight: null, widgetX: null, widgetY: null, widgetCorner: 'bottomRight',
       bellEnabled: false, bellVolume: 0.8, bellPreset: 'school-bell', showCountdown: true
     },
@@ -104,6 +106,13 @@ function createSetupWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
   setupWin.loadFile(path.join(__dirname, 'renderer', 'setup.html'));
+  setupWin.on('close', (e) => {
+    // 有未保存修改时拦截关闭，通知渲染进程弹确认框（保存并应用/仅保存/放弃）
+        if (setupDirty && !quitting) {
+      e.preventDefault();
+      try { setupWin.webContents.send('setup:askClose'); } catch (err) {}
+    }
+  });
   setupWin.on('closed', () => { setupWin = null; });
   return setupWin;
 }
@@ -459,6 +468,11 @@ ipcMain.handle('data:import', async () => {
 ipcMain.on('log:error', (e, m) => console.error('renderer error:', m));
 ipcMain.handle('app:quit', () => app.quit());
 
+ipcMain.on('setup:setDirty', (e, on) => { setupDirty = !!on; });
+ipcMain.on('setup:forceClose', () => {
+  setupDirty = false;
+  if (setupWin && !setupWin.isDestroyed()) setupWin.close();
+});
 ipcMain.handle('settings:setOpacity', (e, v) => {
   const a = Math.max(0.2, Math.min(1, Number(v)));
   data.settings.widgetOpacity = isNaN(a) ? 0.66 : a;
