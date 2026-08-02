@@ -34,6 +34,7 @@ function defaultData() {
       firstRun: true, widgetApplied: false, remindMinutes: 10,
       semesterStart: null, showWeekStrip: true, clickThrough: false, autostart: false, widgetOpacity: 0.66,
       courseAbbr: {},  // { 课程全名: 简写 } 挂件显示用
+      mergeConsecutive: true, // 挂件把同一课程连续节次合并成一个大框（显示起止时间）
       widgetWidth: 900, widgetHeight: null, widgetX: null, widgetY: null, widgetCorner: 'bottomRight',
       bellEnabled: false, bellVolume: 0.8, bellPreset: 'school-bell', showCountdown: true
     },

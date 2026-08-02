@@ -38,18 +38,32 @@ function dayItems(date, isThisWeek) {
   const week = currentWeek();
   const list = [];
   if (isThisWeek) {
-    for (const c of data.courses) {
-      if (c.day !== wk || !weekMatches(c, week)) continue;
-      const p = data.periods.find(x => x.index === c.period);
-      if (!p) continue;
-      const abbrMap = data.settings.courseAbbr || {};
+    const abbrMap = data.settings.courseAbbr || {};
+    const merge = data.settings.mergeConsecutive !== false;
+    // 合并判据：同课程名 + 同老师 + 同颜色（地点允许不同，连堂换教室/只给其中一节填了地点也能合并，地点会并列显示）
+    const sameCourse = (a, b) => a.name === b.name && (a.teacher || '') === (b.teacher || '') && (a.color || '') === (b.color || '');
+    const courses = data.courses.filter(c => c.day === wk && weekMatches(c, week)).sort((a, b) => a.period - b.period);
+    const periodOf = (idx) => data.periods.find(x => x.index === idx);
+    let i = 0;
+    while (i < courses.length) {
+      const c = courses[i];
+      const p0 = periodOf(c.period);
+      if (!p0) { i++; continue; }
+      let j = i;
+      // 合并连堂课：同一课程（名/地点/老师/颜色一致）且节次连续（如 3-4-5）
+      while (merge && j + 1 < courses.length && sameCourse(c, courses[j + 1]) && courses[j + 1].period === courses[j].period + 1) j++;
+      const last = periodOf(courses[j].period) || p0;
+      const merged = j > i;
+      const locs = [...new Set(courses.slice(i, j + 1).map(x => (x.location || '').trim()).filter(Boolean))];
       list.push({
-        kind: 'course', startMin: toMinutes(p.start), time: p.start,
+        kind: 'course', startMin: toMinutes(p0.start), endMin: toMinutes(last.end),
+        time: merged ? p0.start + '~' + last.end : p0.start,
         name: abbrMap[c.name] || c.name, full: c.name,
-        loc: c.location || '', teacher: c.teacher || '',
-        done: false, color: c.color || null,
-        current: date === dateKey(new Date()) && isNowBetween(p.start, p.end)
+        loc: locs.join(' / '), teacher: c.teacher || '',
+        done: false, color: c.color || null, merged,
+        current: date === dateKey(new Date()) && isNowBetween(p0.start, last.end)
       });
+      i = j + 1;
     }
   }
   for (const t of (data.todos[date] || [])) {

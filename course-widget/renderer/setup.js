@@ -327,6 +327,7 @@ function renderSettings() {
   $('setOpacity').value = opPct;
   $('opacityLabel').textContent = opPct + '%';
   $('setCompact').checked = !!data.settings.widgetCompact;
+  $('setMerge').checked = !!data.settings.mergeConsecutive;
   $('setWeekStrip').checked = !!data.settings.showWeekStrip;
   $('setAutostart').checked = !!data.settings.autostart;
   $('setShowCountdown').checked = !!data.settings.showCountdown;
@@ -358,6 +359,7 @@ $('setOpacity').addEventListener('input', (e) => {
 if ($('btnSnapBR')) $('btnSnapBR').addEventListener('click', async () => { if (window.api.snapCorner) await window.api.snapCorner('bottomRight'); });
 if ($('btnSnapTR')) $('btnSnapTR').addEventListener('click', async () => { if (window.api.snapCorner) await window.api.snapCorner('topRight'); });
 $('setCompact').addEventListener('change', (e) => { data.settings.widgetCompact = e.target.checked; markDirty(); });
+$('setMerge').addEventListener('change', (e) => { data.settings.mergeConsecutive = e.target.checked; markDirty(); });
 $('setWeekStrip').addEventListener('change', (e) => { data.settings.showWeekStrip = e.target.checked; markDirty(); });
 $('setAutostart').addEventListener('change', async (e) => { data.settings.autostart = e.target.checked; await window.api.setAutostart(e.target.checked); });
 $('setShowCountdown').addEventListener('change', (e) => { data.settings.showCountdown = e.target.checked; markDirty(); });

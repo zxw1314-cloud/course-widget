@@ -5,6 +5,7 @@ Electron 开发的 Windows 桌面小工具：**每周课表 + 上课/待办/活�
 ## 功能（当前 v3）
 
 - 📅 **14 天双周挂件**：上行=本周 7 天（显示 课程+待办+活动），下行=下周 7 天（只显示 待办+活动，不重复课表）；今天的格子高亮；课程只显示**开始时间**+**简写**，地点自动换到小字一行（长地点可换行）
+- 🧩 **合并连堂课**（默认开启，设置可关）：连续的同名课程（如 3-4-5 节大学物理实验）在挂件里合成一个大框，显示**起止时间**（10:00~12:30）；判据=同名+同老师+同颜色，地点可不同（会并列显示）
 - 🎨 **颜色约定**：课程=白字（可自定义**课程颜色**与**教师**）、待办=黄字（带 ⏰ 截止时间）、临时活动=红字；每格按时间从上到下排、不限制条数
 - ✏️ **课程简写映射**：设置页为每门课配 2~4 字简写（如"数据结构与算法"→"数算"），挂件只显示简写、鼠标悬停可看全称；AI 提取的是全称，在这里配好简写即可
 - 👆 **点日期编辑**：点击任意日期 → 弹出"当日窗口"，查看课程/待办/活动，直接添加、勾选完成、删除
@@ -56,7 +57,7 @@ npm start
 
 ```jsonc
 {
-  "settings": { "firstRun", "widgetApplied", "remindMinutes", "semesterStart", "widgetWidth", "widgetHeight", "widgetX", "widgetY", "widgetCorner"(legacy), "clickThrough", "autostart", "widgetOpacity"(0.2~1), ... },
+  "settings": { "firstRun", "widgetApplied", "remindMinutes", "semesterStart", "widgetWidth", "widgetHeight", "widgetX", "widgetY", "widgetCorner"(legacy), "clickThrough", "autostart", "widgetOpacity"(0.2~1), "courseAbbr"{全名:简写}, "mergeConsecutive"(bool), ... },
   "periods":   [ { "index", "label": "第1节|中午1节", "start": "08:00", "end": "08:45" }, ... ],   // 节次时间表（label 用于显示，可支持"中午1节"等非编号节次）
   "courses":   [ { "id", "name", "day": 1-7, "period", "weeks": []|null, "location", "teacher", "color": "#xxxxxx"|null, "reminders": { "points": [10,60], "repeat": { "start": 30, "every": 10 } | null } } ],
   "todos":     { "YYYY-MM-DD": [ { "id", "text", "deadline": "HH:MM"|null, "done", "reminders": {...} } ] },
@@ -96,7 +97,7 @@ course-widget/
 
 ## 当前状态 / 交接
 
-- ✅ 已实现：14 天双周挂件、三色事项（课程可自定义颜色/教师）、当日窗口编辑、多次提醒、上下课铃声、当前课/下节课状态、倒数日/考试（时间+地点+到点提醒）、挂件透明度调节、数据即时刷新、托盘、开机自启、导出/导入、单实例、选择性点击穿透
+- ✅ 已实现：14 天双周挂件、三色事项（课程可自定义颜色/教师）、当日窗口编辑、多次提醒、上下课铃声、当前课/下节课状态、倒数日/考试（时间+地点+到点提醒）、挂件透明度调节、课程简写、合并连堂课、数据即时刷新、未保存提醒、JSON 导入课表+AI 提示词、托盘、开机自启、导出/导入、单实例、选择性点击穿透
 - ⚠️ 已知取舍：挂件是"固定角落的普通窗口"，不是"贴进壁纸图层"（原因见 ADR-0001）
 - 🚧 可能的下一步：electron-builder 打包独立 exe；农历/节假日自动显示（当前倒数日需手动添加）；课程也支持周期重复提醒的界面简化；挂件内直接快速添加事项
 - 数据位置：`%APPDATA%\course-widget\data.json`；运行日志相关见 main.js 的 console 输出
