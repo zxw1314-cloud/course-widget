@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>桌面课表 · 手机端</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; background: #0e1220; color: #eef1f8; min-height: 100vh; padding: env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 12px); }
+h1 { font-size: 18px; margin: 14px 2px 4px; }
+.sub { color: #7d86a3; font-size: 12px; margin: 0 2px 14px; }
+.card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+.card h2 { font-size: 14px; margin-bottom: 8px; color: #cfe0ff; }
+.tabs { display: flex; gap: 6px; margin: 10px 0; }
+.tabs button { flex: 1; padding: 9px 0; border: none; border-radius: 8px; background: rgba(255,255,255,0.06); color: #aab2c8; font-size: 14px; cursor: pointer; }
+.tabs button.on { background: #4080ff; color: #fff; font-weight: 600; }
+.panel { display: none; } .panel.on { display: block; }
+.item { display: flex; gap: 8px; align-items: baseline; padding: 6px 2px; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: 13px; }
+.item .tm { color: #9fb0d6; font-size: 12px; flex: 0 0 auto; min-width: 46px; }
+.item .txt { flex: 1; min-width: 0; }
+.item .loc { color: #7d86a3; font-size: 11px; }
+.todo.done { text-decoration: line-through; opacity: .5; }
+input, select, textarea { width: 100%; padding: 9px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #eef1f8; font-size: 14px; margin: 5px 0; }
+.row { display: flex; gap: 8px; } .row > * { flex: 1; }
+button.act { width: 100%; padding: 11px; border: none; border-radius: 10px; background: #4080ff; color: #fff; font-size: 15px; font-weight: 600; margin-top: 8px; cursor: pointer; }
+button.act:disabled { opacity: .5; }
+#outbox { display: none; margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(246,200,95,0.12); border: 1px solid rgba(246,200,95,0.35); color: #ffd76a; font-size: 12px; }
+.empty { color: #66708a; text-align: center; padding: 14px 0; font-size: 13px; }
+.mode-tag { display: inline-block; padding: 1px 8px; border-radius: 8px; background: rgba(64,128,255,.25); color: #cfe0ff; font-size: 11px; margin-left: 6px; }
+#tokenScreen { text-align: center; padding-top: 40px; }
+#tokenScreen p { color: #7d86a3; font-size: 13px; margin: 8px 0 18px; }
+.badge { background: #f28b82; color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="tokenScreen" style="display:none">
+  <h1>🔑 连接电脑</h1>
+  <p>在电脑「设置 → 手机连接」里查看访问令牌，粘贴到这里（仅存本机）。</p>
+  <input id="tokenInput" placeholder="访问令牌，如 cw-xxxx" autocomplete="off">
+  <button class="act" onclick="saveToken()">连接</button>
+</div>
+
+<div id="main" style="display:none">
+  <h1>桌面课表<span class="mode-tag" id="modeTag">手机端</span></h1>
+  <div class="sub" id="todaySub"></div>
+
+  <div class="tabs">
+    <button id="tabToday" class="on" onclick="switchTab('today')">今日安排</button>
+    <button id="tabAdd" onclick="switchTab('add')">➕ 加待办</button>
+  </div>
+
+  <div id="panelToday" class="panel on">
+    <div class="card"><h2>📚 课程</h2><div id="cList"></div></div>
+    <div class="card"><h2>✅ 待办</h2><div id="tList"></div></div>
+    <div class="card"><h2>📅 活动</h2><div id="eList"></div></div>
+    <div class="card"><h2>🎯 今日倒数</h2><div id="cdList"></div></div>
+  </div>
+
+  <div id="panelAdd" class="panel">
+    <div class="card">
+      <h2>新增待办（发送到电脑）</h2>
+      <input id="inText" placeholder="待办内容，如：交实验报告" autocomplete="off">
+      <div class="row">
+        <input id="inDate" type="date">
+        <input id="inTime" type="time" title="截止时间（可选）">
+      </div>
+      <input id="inPoints" type="number" min="0" value="10" title="提前多少分钟提醒（可选）">
+      <button class="act" id="btnSend" onclick="sendTodo()">发送到电脑</button>
+      <div id="outbox"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var TOKEN_KEY = 'cw_mobile_token';
+var OUTBOX_KEY = 'cw_mobile_outbox';
+function $(id) { return document.getElementById(id); }
+function todayStr() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+
+function api(path, opts) {
+  opts = opts || {};
+  var headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+  var token = localStorage.getItem(TOKEN_KEY);
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  return fetch(path, Object.assign({ headers: headers }, opts));
+}
+
+function switchTab(which) {
+  $('tabToday').classList.toggle('on', which === 'today');
+  $('tabAdd').classList.toggle('on', which === 'add');
+  $('panelToday').classList.toggle('on', which === 'today');
+  $('panelAdd').classList.toggle('on', which === 'add');
+  if (which === 'today') loadToday();
+}
+
+function saveToken() {
+  var v = $('tokenInput').value.trim();
+  if (!v) return;
+  localStorage.setItem(TOKEN_KEY, v);
+  boot();
+}
+
+function boot() {
+  var token = localStorage.getItem(TOKEN_KEY);
+  if (!token) { $('tokenScreen').style.display = ''; $('main').style.display = 'none'; return; }
+  $('tokenScreen').style.display = 'none';
+  $('main').style.display = '';
+  $('inDate').value = todayStr();
+  loadToday();
+  renderOutbox();
+  // 上线自动补发离线队列
+  flushOutbox();
+  setInterval(flushOutbox, 20000);
+}
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+
+function loadToday() {
+  api('/api/today').then(function(r){ if (r.status === 401) { localStorage.removeItem(TOKEN_KEY); boot(); return; } return r.json(); }).then(function(d){
+    if (!d) return;
+    $('todaySub').textContent = d.date + ' ' + d.weekday + (d.countdowns && d.countdowns.length ? ' · 🎯' + d.countdowns.map(function(c){ return c.title + (c.time ? ' ' + c.time : ''); }).join('、') : '');
+    var cList = $('cList'), tList = $('tList'), eList = $('eList');
+    cList.innerHTML = (d.courses && d.courses.length) ? d.courses.map(function(c){
+      return '<div class="item"><span class="tm">' + esc(c.start) + '</span><span class="txt">' + esc(c.abbr || c.name) + '</span>' + (c.location ? '<span class="loc">📍' + esc(c.location) + '</span>' : '') + '</div>';
+    }).join('') : '<div class="empty">今天没课</div>';
+    tList.innerHTML = (d.todos && d.todos.length) ? d.todos.map(function(t){
+      return '<div class="item todo' + (t.done ? ' done' : '') + '"><span class="tm">' + (t.deadline ? esc(t.deadline) : '') + '</span><span class="txt">' + esc(t.text) + '</span></div>';
+    }).join('') : '<div class="empty">暂无待办</div>';
+    eList.innerHTML = (d.events && d.events.length) ? d.events.map(function(e){
+      return '<div class="item"><span class="tm">' + (e.time ? esc(e.time) : '全天') + '</span><span class="txt">' + esc(e.title) + '</span>' + (e.location ? '<span class="loc">📍' + esc(e.location) + '</span>' : '') + '</div>';
+    }).join('') : '<div class="empty">暂无活动</div>';
+    $('cdList').innerHTML = (d.countdowns && d.countdowns.length) ? d.countdowns.map(function(c){
+      return '<div class="item"><span class="tm">' + (c.time ? esc(c.time) : '今天') + '</span><span class="txt">' + esc(c.title) + '</span>' + (c.location ? '<span class="loc">📍' + esc(c.location) + '</span>' : '') + '</div>';
+    }).join('') : '<div class="empty">无</div>';
+  }).catch(function(){ $('cList').innerHTML = '<div class="empty">连接电脑失败，稍后重试</div>'; });
+}
+
+function sendTodo() {
+  var text = $('inText').value.trim();
+  if (!text) { alert('请输入待办内容'); return; }
+  var payload = {
+    text: text,
+    date: $('inDate').value || todayStr(),
+    deadline: $('inTime').value || null,
+    points: [$('inPoints').value ? parseInt($('inPoints').value, 10) : 10]
+  };
+  api('/api/todo', { method: 'POST', body: JSON.stringify(payload) }).then(function(r){
+    if (r.ok) {
+      $('inText').value = ''; $('inTime').value = '';
+      $('btnSend').textContent = '✅ 已发送到电脑';
+      setTimeout(function(){ $('btnSend').textContent = '发送到电脑'; }, 1500);
+      loadToday();
+    } else if (r.status === 401) { localStorage.removeItem(TOKEN_KEY); boot(); }
+    else { r.json().then(function(d){ alert('发送失败：' + (d.error || r.status)); }).catch(function(){ alert('发送失败：' + r.status); }); }
+  }).catch(function(){
+    // 离线：存入待发送队列
+    var out = JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]');
+    out.push(Object.assign(payload, { createdAt: Date.now() }));
+    localStorage.setItem(OUTBOX_KEY, JSON.stringify(out));
+    $('inText').value = '';
+    renderOutbox();
+    alert('电脑不在线，已存入待发送队列（连接后自动补发）');
+  });
+}
+
+function renderOutbox() {
+  var out = JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]');
+  var box = $('outbox');
+  if (!out.length) { box.style.display = 'none'; box.textContent = ''; return; }
+  box.style.display = '';
+  box.innerHTML = '📥 待发送 ' + out.length + ' 条 · <a href="javascript:void(0)" onclick="flushOutbox(true)" style="color:#ffd76a">立即重试</a>';
+}
+
+function flushOutbox(manual) {
+  var out = JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]');
+  if (!out.length) return;
+  api('/api/health').then(function(r){ if (r.status === 401) { localStorage.removeItem(TOKEN_KEY); boot(); } }).catch(function(){ return; }).then(function(){
+    var remaining = JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]');
+    var chain = Promise.resolve();
+    remaining.forEach(function(item){
+      chain = chain.then(function(){
+        return api('/api/todo', { method: 'POST', body: JSON.stringify({ text: item.text, date: item.date, deadline: item.deadline || null, points: item.points || [10] }) }).then(function(r){
+          if (r.ok) {
+            var cur = JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]').filter(function(x){ return x.createdAt !== item.createdAt; });
+            localStorage.setItem(OUTBOX_KEY, JSON.stringify(cur));
+            renderOutbox();
+            loadToday();
+          }
+        }).catch(function(){});
+      });
+    });
+  });
+}
+
+var mode = '__CW_MODE__';
+if (mode !== 'app' && mode !== 'web' && mode !== 'both') mode = 'both';
+$('modeTag').textContent = mode === 'web' ? '网页版' : (mode === 'app' ? 'App版' : '手机端');
+boot();
+</script>
+</body>
+</html>

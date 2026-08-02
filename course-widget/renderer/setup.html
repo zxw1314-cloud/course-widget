@@ -175,6 +175,22 @@ hr { border: none; border-top: 1px dashed #e3e6ef; margin: 10px 0; }
       <label><input id="setAutostart" type="checkbox"> 开机自启</label>
       <label><input id="setShowCountdown" type="checkbox"> 挂件显示倒数日</label>
       <hr>
+      <h3>📱 手机连接（局域网 / 樱花frp，保存后生效）</h3>
+      <label><input id="setMobileBridge" type="checkbox"> 允许手机/远程连接（电脑开一个 HTTP 端口，手机可查看今日/添加待办）</label>
+      <label>开放模式 <select id="setMobileMode" style="width:200px">
+        <option value="both">网页 + App（都开）</option>
+        <option value="web">仅网页</option>
+        <option value="app">仅 App</option>
+      </select></label>
+      <div id="mobileInfoBox" style="display:none;font-size:12px;color:#6b7280;line-height:1.7">
+        <div>本地地址：<code id="miLocalUrl"></code></div>
+        <div>访问令牌：<code id="miToken" style="word-break:break-all"></code>
+          <button class="ghost small" id="btnCopyToken" type="button">复制</button>
+          <button class="ghost small" id="btnRegenToken" type="button">重新生成</button>
+        </div>
+        <p style="margin-top:4px">手机连同一 Wi-Fi 直接访问本地地址；出门用樱花frp 把本机 <code>8723</code> 端口映射到公网，手机访问映射地址。改完记得点「保存」。</p>
+      </div>
+      <hr>
       <h3>提醒声音（弹系统通知时同时播放提示音，防止错过）</h3>
       <label><input id="setBell" type="checkbox"> 弹通知时播放提示音</label>
       <label>提示音 <select id="setBellPreset" style="width:180px"></select>

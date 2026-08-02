@@ -395,6 +395,9 @@ function renderSettings() {
   $('setAutostart').checked = !!data.settings.autostart;
   $('setShowCountdown').checked = !!data.settings.showCountdown;
   $('setBell').checked = !!data.settings.bellEnabled;
+  $('setMobileBridge').checked = !!data.settings.mobileBridgeEnabled;
+  $('setMobileMode').value = data.settings.mobileBridgeMode || 'both';
+  refreshMobileInfo();
   const presetSel = $('setBellPreset');
   presetSel.innerHTML = '';
   for (const p of CHIME_PRESETS) {
@@ -426,6 +429,31 @@ $('setMerge').addEventListener('change', (e) => { data.settings.mergeConsecutive
 $('setWeekStrip').addEventListener('change', (e) => { data.settings.showWeekStrip = e.target.checked; markDirty(); });
 $('setAutostart').addEventListener('change', async (e) => { data.settings.autostart = e.target.checked; await window.api.setAutostart(e.target.checked); });
 $('setShowCountdown').addEventListener('change', (e) => { data.settings.showCountdown = e.target.checked; markDirty(); });
+$('setMobileBridge').addEventListener('change', (e) => {
+  data.settings.mobileBridgeEnabled = e.target.checked; markDirty(); refreshMobileInfo();
+});
+$('setMobileMode').addEventListener('change', (e) => { data.settings.mobileBridgeMode = e.target.value; markDirty(); refreshMobileInfo(); });
+$('btnCopyToken').addEventListener('click', () => { copyText($('miToken').textContent); toast('✅ 访问令牌已复制'); });
+$('btnRegenToken').addEventListener('click', () => {
+  if (!confirm('重新生成令牌后，旧的手机端连接会失效，确定？')) return;
+  const b = new Uint8Array(18);
+  crypto.getRandomValues(b);
+  data.settings.mobileToken = 'cw-' + Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+  markDirty(); refreshMobileInfo();
+});
+async function refreshMobileInfo() {
+  const box = $('mobileInfoBox');
+  let info = null;
+  if (window.api.mobileInfo) { try { info = await window.api.mobileInfo(); } catch (e) {} }
+  const on = !!data.settings.mobileBridgeEnabled;
+  box.style.display = on ? '' : 'none';
+  if (!on) return;
+  const token = data.settings.mobileToken || (info && info.token) || '';
+  $('miToken').textContent = token;
+  const port = (info && info.port) || 8723;
+  const ips = (info && info.localIPs) || [];
+  $('miLocalUrl').textContent = ips.length ? ips.map(ip => 'http://' + ip + ':' + port + '/').join('  ') : 'http://<本机IP>:' + port + '/';
+}
 $('setBell').addEventListener('change', (e) => { data.settings.bellEnabled = e.target.checked; markDirty(); });
 $('setBellPreset').addEventListener('change', (e) => { data.settings.bellPreset = e.target.value; markDirty(); });
 $('setBellVolume').addEventListener('input', (e) => {

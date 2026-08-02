@@ -1,6 +1,9 @@
 const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, dialog, screen, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const crypto = require('crypto');
+const os = require('os');
 
 const APP_ID = 'com.course-widget.desktop';
 app.setAppUserModelId(APP_ID);
@@ -35,6 +38,7 @@ function defaultData() {
       semesterStart: null, showWeekStrip: true, clickThrough: false, autostart: false, widgetOpacity: 0.66,
       courseAbbr: {},  // { 课程全名: 简写 } 挂件显示用
       mergeConsecutive: true, // 挂件把同一课程连续节次合并成一个大框（显示起止时间）
+      mobileBridgeEnabled: false, mobileBridgeMode: 'both', mobileToken: null, // 手机远程桥（局域网/樱花frp）
       widgetWidth: 900, widgetHeight: null, widgetX: null, widgetY: null, widgetCorner: 'bottomRight',
       bellEnabled: false, bellVolume: 0.8, bellPreset: 'school-bell', showCountdown: true
     },
@@ -303,15 +307,128 @@ function broadcastDataChanged() {
   }
 }
 
+// ---------------- 手机远程桥（HTTP 服务：手机网页 + App API） ----------------
+const MOBILE_PORT = 8723;
+let mobileServer = null;
+let mobilePageHtml = null;
+function genMobileToken() { return 'cw-' + crypto.randomBytes(18).toString('base64url'); }
+function loadMobilePage() {
+  try { mobilePageHtml = fs.readFileSync(path.join(__dirname, 'renderer', 'mobile.html'), 'utf8'); } catch (e) { mobilePageHtml = '<h1>mobile.html 缺失</h1>'; }
+}
+function sendJson(res, code, obj) {
+  const s = JSON.stringify(obj);
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(s);
+}
+function mobileAuthOk(req) {
+  const t = data.settings.mobileToken || '';
+  if (!t) return false;
+  const h = req.headers['authorization'] || '';
+  return h === 'Bearer ' + t;
+}
+function localIPs() {
+  const out = [];
+  try {
+    for (const list of Object.values(os.networkInterfaces())) {
+      for (const ni of list || []) if (ni.family === 'IPv4' && !ni.internal) out.push(ni.address);
+    }
+  } catch (e) {}
+  return out;
+}
+function todayPayload() {
+  const now = new Date();
+  const tk = dateKey(now);
+  const wk = weekdayIndex(now);
+  const week = currentWeek();
+  const abbrMap = data.settings.courseAbbr || {};
+  const courses = [];
+  for (const c of data.courses) {
+    if (c.day !== wk || !weekMatches(c, week)) continue;
+    const p = data.periods.find(x => x.index === c.period);
+    if (!p) continue;
+    courses.push({ name: c.name, abbr: abbrMap[c.name] || c.name, start: p.start, end: p.end, location: c.location || null, period: c.period });
+  }
+  courses.sort((a, b) => a.period - b.period);
+  const todos = (data.todos[tk] || []).map(t => ({ text: t.text, deadline: t.deadline, done: !!t.done }));
+  const events = data.events.filter(e => e.date === tk).map(e => ({ title: e.title, time: e.time || null, location: e.location || null }));
+  const countdowns = (data.countdowns || []).filter(c => c.date === tk).map(c => ({ title: c.title, time: c.time || null, location: c.location || null }));
+  return { date: tk, weekday: '周' + ['日','一','二','三','四','五','六'][now.getDay()], courses, todos, events, countdowns };
+}
+function handleMobileRequest(req, res) {
+  let pathname = '';
+  try { pathname = new URL(req.url, 'http://x').pathname; } catch (e) { pathname = '/'; }
+  // 网页界面
+  if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
+    const mode = data.settings.mobileBridgeMode || 'both';
+    if (mode === 'app') { sendJson(res, 403, { error: '当前设置为仅 App 模式，请在电脑设置中开放网页模式' }); return; }
+    if (mobilePageHtml == null) loadMobilePage();
+    const page = mobilePageHtml.replace('__CW_MODE__', mode);
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(page);
+    return;
+  }
+  // 健康检查（无需 token）
+  if (req.method === 'GET' && pathname === '/api/health') { sendJson(res, 200, { ok: true, app: 'course-widget', time: new Date().toISOString() }); return; }
+  if (!mobileAuthOk(req)) { sendJson(res, 401, { error: 'unauthorized' }); return; }
+  if (req.method === 'GET' && pathname === '/api/today') { sendJson(res, 200, todayPayload()); return; }
+  if (req.method === 'POST' && pathname === '/api/todo') {
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 16384) req.destroy(); });
+    req.on('end', () => {
+      let o = null;
+      try { o = JSON.parse(body); } catch (e) { sendJson(res, 400, { error: 'bad json' }); return; }
+      const text = String(o.text || '').trim();
+      if (!text) { sendJson(res, 400, { error: 'text required' }); return; }
+      let date = String(o.date || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = dateKey(new Date());
+      const deadline = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(o.deadline || '')) ? String(o.deadline) : null;
+      const points = Array.isArray(o.points) ? o.points.map(Number).filter(n => Number.isFinite(n) && n >= 0) : null;
+      if (!data.todos[date]) data.todos[date] = [];
+      const todo = { id: Math.random().toString(36).slice(2, 10), text, deadline, done: false, createdAt: Date.now(), reminders: { points: (points && points.length) ? points : [10], repeat: null } };
+      data.todos[date].push(todo);
+      saveData(); broadcastDataChanged();
+      sendJson(res, 200, { ok: true, todo });
+    });
+    return;
+  }
+  sendJson(res, 404, { error: 'not found' });
+}
+function startMobileServer() {
+  if (mobileServer) return;
+  try {
+    mobileServer = http.createServer(handleMobileRequest);
+    mobileServer.on('error', (e) => { console.error('mobile server error', e.message); mobileServer = null; });
+    mobileServer.listen(MOBILE_PORT, '0.0.0.0');
+  } catch (e) { console.error('mobile server start failed', e.message); }
+}
+function stopMobileServer() { if (mobileServer) { try { mobileServer.close(); } catch (e) {} mobileServer = null; } }
+function syncMobileServer() {
+  if (data.settings.mobileBridgeEnabled) {
+    if (!data.settings.mobileToken) { data.settings.mobileToken = genMobileToken(); saveData(); }
+    startMobileServer();
+  } else { stopMobileServer(); }
+}
+
 // ---------------- IPC ----------------
 ipcMain.handle('data:get', () => data);
 ipcMain.handle('data:set', (e, next) => {
   if (next && typeof next === 'object') {
     data = migrate(Object.assign(defaultData(), next, { settings: Object.assign(defaultData().settings, next.settings || {}) }));
     if (data.settings.autostart !== app.getLoginItemSettings().openAtLogin) setAutostart(data.settings.autostart);
-    saveData(); rebuildTrayMenu(); broadcastDataChanged();
+    saveData(); rebuildTrayMenu(); broadcastDataChanged(); syncMobileServer();
   }
   return true;
+});
+ipcMain.handle('mobile:info', () => {
+  const t = data.settings.mobileToken || '';
+  if (data.settings.mobileBridgeEnabled && !t) { data.settings.mobileToken = genMobileToken(); saveData(); }
+  return {
+    enabled: !!data.settings.mobileBridgeEnabled,
+    mode: data.settings.mobileBridgeMode || 'both',
+    token: data.settings.mobileToken || '',
+    port: MOBILE_PORT,
+    localIPs: localIPs()
+  };
 });
 ipcMain.handle('ui:openSetup', () => { createSetupWindow(); return true; });
 ipcMain.handle('ui:openPopup', (e, date) => { openPopup(String(date)); return true; });
@@ -440,7 +557,7 @@ ipcMain.handle('data:import', async () => {
     const parsed = JSON.parse(fs.readFileSync(r.filePaths[0], 'utf8'));
     if (parsed && typeof parsed === 'object') {
       data = migrate(Object.assign(defaultData(), parsed, { settings: Object.assign(defaultData().settings, parsed.settings || {}) }));
-      saveData(); rebuildTrayMenu(); broadcastDataChanged();
+      saveData(); rebuildTrayMenu(); broadcastDataChanged(); syncMobileServer();
       return { ok: true, path: r.filePaths[0] };
     }
     return { ok: false, error: '文件格式不正确' };
@@ -476,4 +593,5 @@ app.whenReady().then(() => {
   }
   setInterval(tickClickThrough, 50);
   setInterval(() => checkReminders(false), 30000);
+  syncMobileServer();
 });

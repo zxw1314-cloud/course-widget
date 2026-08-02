@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   getWidgetBounds: () => ipcRenderer.invoke('widget:getBounds'),
   setAutostart: (on) => ipcRenderer.invoke('settings:autostart', on),
   setOpacity: (v) => ipcRenderer.invoke('settings:setOpacity', v),
+  mobileInfo: () => ipcRenderer.invoke('mobile:info'),
   setSetupDirty: (on) => ipcRenderer.send('setup:setDirty', !!on),
   forceCloseSetup: () => ipcRenderer.send('setup:forceClose'),
   onAskClose: (cb) => { const h = () => cb(); ipcRenderer.on('setup:askClose', h); return () => ipcRenderer.removeListener('setup:askClose', h); },
