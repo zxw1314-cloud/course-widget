@@ -90,6 +90,7 @@ function renderWeek(containerId, startDate, count, isThisWeek, todayKey) {
 }
 
 function render() {
+  if (dragging) return; // 拖拽中不重建 DOM，避免 pointer capture 被释放导致拖拽卡死
   const now = new Date();
   const monday = mondayOf(now);
   const week1end = new Date(monday); week1end.setDate(monday.getDate() + 6);
@@ -172,66 +173,77 @@ function renderCountdowns() {
   }).join('');
 }
 
-// ---------- 选择性点击穿透：只保留 14 个加号 / 移动手柄 / 缩放手柄 / 右上角按钮 可交互，其余全部穿透到桌面 ----------
-let clickThroughOn = false;
-let dragging = false;
-function isInteractive(el) {
-  return !!(el && el.closest && el.closest('.add, button, .mv, .rz'));
+// ---------- 交互区域上报：主进程每 50ms 轮询光标，命中交互区才取消穿透（不依赖鼠标事件转发，本机转发不可用） ----------
+function sendInteractiveAreas() {
+  if (!window.api.setInteractiveAreas) return;
+  const els = document.querySelectorAll('.add, button, .mv, .rz');
+  const areas = [];
+  els.forEach(el => {
+    const r = el.getBoundingClientRect();
+    areas.push({ x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) });
+  });
+  window.api.setInteractiveAreas(areas);
 }
-document.addEventListener('mousemove', (e) => {
-  if (dragging) return;
-  const want = !isInteractive(e.target);
-  if (want !== clickThroughOn) {
-    clickThroughOn = want;
-    if (window.api.setClickThrough) window.api.setClickThrough(want);
-  }
-});
-document.addEventListener('mouseleave', () => {
-  if (dragging) return;
-  if (!clickThroughOn) { clickThroughOn = true; if (window.api.setClickThrough) window.api.setClickThrough(true); }
-});
-window.__ctState = () => clickThroughOn;
+window.addEventListener('resize', () => sendInteractiveAreas());
 
 // ---------- 移动 / 缩放拖拽 ----------
+let dragging = false;
 let drag = null;
 function beginDrag(e, mode, edge) {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
   e.preventDefault();
   dragging = true;
-  drag = {
-    mode, edge,
-    start: { x: window.screenX, y: window.screenY, w: window.outerWidth, h: window.outerHeight, mx: e.screenX, my: e.screenY }
-  };
-  try { e.target.setPointerCapture(e.pointerId); } catch (err) {}
+  if (window.api.setDragActive) window.api.setDragActive(true);
   document.addEventListener('pointermove', onDragMove);
   document.addEventListener('pointerup', endDrag);
   document.addEventListener('pointercancel', endDrag);
+  (async () => {
+    // 拖拽起点用主进程的真实窗口 bounds（渲染进程 screenX/outerWidth 可能失同步，会导致窗口算飞）
+    let sb = { x: window.screenX, y: window.screenY, w: window.outerWidth, h: window.outerHeight };
+    if (window.api.getWidgetBounds) {
+      try { const g = await window.api.getWidgetBounds(); if (g) sb = { x: g.x, y: g.y, w: g.width, h: g.height }; } catch (err) {}
+    }
+    if (!dragging) return; // 拖拽已在等 bounds 期间结束
+    drag = { mode, edge, start: { x: sb.x, y: sb.y, w: sb.w, h: sb.h, mx: e.screenX, my: e.screenY } };
+    try { e.target.setPointerCapture(e.pointerId); } catch (err) {}
+  })();
 }
 function onDragMove(e) {
   if (!drag) return;
   const s = drag.start;
+  if (drag.timer) clearTimeout(drag.timer);
+  drag.timer = setTimeout(endDrag, 2000); // 兜底：pointerup 丢失时 2 秒无移动自动结束，防拖拽卡死
   const dx = e.screenX - s.mx;
   const dy = e.screenY - s.my;
-  const b = { x: s.x, y: s.y };
+  // 目标始终带上完整宽高（以拖拽起点为基准），主进程才不会把"读回的膨胀尺寸"再写回导致越拖越宽/越高
+  const b = { x: s.x, y: s.y, width: s.w, height: s.h };
   if (drag.mode === 'move') {
     b.x = s.x + dx; b.y = s.y + dy;
   } else {
     const edge = drag.edge || '';
     if (edge.includes('l')) { b.x = s.x + dx; b.width = s.w - dx; }
-    if (edge.includes('r')) b.width = s.w + dx;
+    else if (edge.includes('r')) b.width = s.w + dx;
     if (edge.includes('t')) { b.y = s.y + dy; b.height = s.h - dy; }
-    if (edge.includes('b')) b.height = s.h + dy;
+    else if (edge.includes('b')) b.height = s.h + dy;
   }
-  if (window.api.setWidgetBounds) window.api.setWidgetBounds(b);
+  drag.last = { x: b.x, y: b.y, width: b.width, height: b.height };
+  if (window.api.setWidgetBounds) window.api.setWidgetBounds(Object.assign({ edge: drag.edge, start: { x: s.x, y: s.y, w: s.w, h: s.h } }, b));
 }
 function endDrag() {
+  const d = drag;
+  if (d && d.timer) { clearTimeout(d.timer); d.timer = null; }
   dragging = false;
   drag = null;
   document.removeEventListener('pointermove', onDragMove);
   document.removeEventListener('pointerup', endDrag);
   document.removeEventListener('pointercancel', endDrag);
-  if (window.api.setWidgetBounds) window.api.setWidgetBounds({ persist: true });
+  if (window.api.setDragActive) window.api.setDragActive(false);
+  // 松手时用最后一次拖拽目标做"精确落位"（correct=true），抵消系统缩放下 setBounds 的 DIP 舍入，避免每次拖拽变大
+  if (window.api.setWidgetBounds && d && d.last) {
+    window.api.setWidgetBounds(Object.assign({ persist: true, correct: true, edge: d.edge, start: { x: d.start.x, y: d.start.y, w: d.start.w, h: d.start.h } }, d.last));
+  }
 }
+window.addEventListener('blur', () => { if (dragging) endDrag(); });
 
 document.querySelectorAll('.rz').forEach(z => {
   z.addEventListener('pointerdown', (e) => beginDrag(e, 'resize', z.dataset.edge));
@@ -249,6 +261,7 @@ $('btnGear').addEventListener('click', () => window.api.openSetup());
     });
   }
   render();
+  sendInteractiveAreas();
   // 首次启动（未持久化过高度）按内容一次性定高并持久化；之后高度只由手动缩放决定，不再自动调整
   if (!data.settings.widgetHeight && window.api.setWidgetBounds) {
     const h = Math.min(document.body.scrollHeight + 4, Math.floor(window.screen.availHeight * 0.8));

@@ -282,7 +282,6 @@ function renderSettings() {
   $('setWidth').value = data.settings.widgetWidth || 900;
   $('setCompact').checked = !!data.settings.widgetCompact;
   $('setWeekStrip').checked = !!data.settings.showWeekStrip;
-  $('setClickThrough').checked = !!data.settings.clickThrough;
   $('setAutostart').checked = !!data.settings.autostart;
   $('setShowCountdown').checked = !!data.settings.showCountdown;
   $('setBell').checked = !!data.settings.bellEnabled;
@@ -302,13 +301,12 @@ $('setRemind').addEventListener('change', (e) => { data.settings.remindMinutes =
 $('setSemester').addEventListener('change', (e) => { data.settings.semesterStart = e.target.value || null; });
 $('setWidth').addEventListener('change', async (e) => {
   data.settings.widgetWidth = Math.min(1600, Math.max(560, parseInt(e.target.value, 10) || 900));
-  if (window.api.setWidgetBounds) await window.api.setWidgetBounds({ width: data.settings.widgetWidth });
+  if (window.api.setWidgetBounds) await window.api.setWidgetBounds({ width: data.settings.widgetWidth, correct: true });
 });
 if ($('btnSnapBR')) $('btnSnapBR').addEventListener('click', async () => { if (window.api.snapCorner) await window.api.snapCorner('bottomRight'); });
 if ($('btnSnapTR')) $('btnSnapTR').addEventListener('click', async () => { if (window.api.snapCorner) await window.api.snapCorner('topRight'); });
 $('setCompact').addEventListener('change', (e) => { data.settings.widgetCompact = e.target.checked; });
 $('setWeekStrip').addEventListener('change', (e) => { data.settings.showWeekStrip = e.target.checked; });
-$('setClickThrough').addEventListener('change', async (e) => { data.settings.clickThrough = e.target.checked; await window.api.setClickThrough(e.target.checked); });
 $('setAutostart').addEventListener('change', async (e) => { data.settings.autostart = e.target.checked; await window.api.setAutostart(e.target.checked); });
 $('setShowCountdown').addEventListener('change', (e) => { data.settings.showCountdown = e.target.checked; });
 $('setBell').addEventListener('change', (e) => { data.settings.bellEnabled = e.target.checked; });

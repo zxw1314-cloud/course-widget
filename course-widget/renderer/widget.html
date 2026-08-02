@@ -43,14 +43,15 @@ body { font-family: "Microsoft YaHei", system-ui, sans-serif; color: #eef1f8; fo
 .it.course { border-left: 3px solid rgba(255,255,255,0.16); }
 .it.now { outline: 1.5px solid #8fc1ff; outline-offset: -1px; background: rgba(80,140,255,0.18); }
 .rz { position: absolute; z-index: 50; }
-.rz-t { top: -3px; left: 18px; right: 18px; height: 7px; cursor: ns-resize; }
-.rz-b { bottom: -3px; left: 18px; right: 18px; height: 7px; cursor: ns-resize; }
-.rz-l { left: -3px; top: 18px; bottom: 18px; width: 7px; cursor: ew-resize; }
-.rz-r { right: -3px; top: 18px; bottom: 18px; width: 7px; cursor: ew-resize; }
-.rz-tl { top: -3px; left: -3px; width: 20px; height: 20px; cursor: nwse-resize; }
-.rz-tr { top: -3px; right: -3px; width: 20px; height: 20px; cursor: nesw-resize; }
-.rz-bl { bottom: -3px; left: -3px; width: 20px; height: 20px; cursor: nesw-resize; }
-.rz-br { bottom: -3px; right: -3px; width: 20px; height: 20px; cursor: nwse-resize; }
+/* 手柄完全放在窗口内容内部（#widget 有 2px margin），避免被窗口裁掉导致只有 3~4px 可点 */
+.rz-t { top: 0; left: 18px; right: 18px; height: 7px; cursor: ns-resize; }
+.rz-b { bottom: 0; left: 18px; right: 18px; height: 7px; cursor: ns-resize; }
+.rz-l { left: 0; top: 18px; bottom: 18px; width: 7px; cursor: ew-resize; }
+.rz-r { right: 0; top: 18px; bottom: 18px; width: 7px; cursor: ew-resize; }
+.rz-tl { top: 0; left: 0; width: 20px; height: 20px; cursor: nwse-resize; }
+.rz-tr { top: 0; right: 0; width: 20px; height: 20px; cursor: nesw-resize; }
+.rz-bl { bottom: 0; left: 0; width: 20px; height: 20px; cursor: nesw-resize; }
+.rz-br { bottom: 0; right: 0; width: 20px; height: 20px; cursor: nwse-resize; }
 </style>
 </head>
 <body>

@@ -126,15 +126,20 @@ function createWidgetWindow() {
   pos.y = Math.min(Math.max(pos.y, workArea.y), workArea.y + workArea.height - h);
   widgetWin = new BrowserWindow({
     width: w, height: h, x: pos.x, y: pos.y,
-    show: false, frame: false, transparent: true, resizable: false, skipTaskbar: true,
+    show: false, frame: false, transparent: true, resizable: false, focusable: false, skipTaskbar: true, minWidth: 100, minHeight: 100,
     alwaysOnTop: false, hasShadow: false, backgroundColor: '#00000000',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
   widgetWin.loadFile(path.join(__dirname, 'renderer', 'widget.html'));
   widgetWin.once('ready-to-show', () => {
     widgetWin.show();
-    if (data.settings.clickThrough) widgetWin.setIgnoreMouseEvents(true, { forward: true });
+    // 启动时按持久化值精确定位/定尺寸，抵消非 100% 缩放下 setBounds 的 DIP 舍入偏差
+    const s = data.settings;
+    if (s.widgetX != null && s.widgetY != null && s.widgetWidth && s.widgetHeight) {
+      try { readWidgetBounds(); applyWidgetBounds({ x: s.widgetX, y: s.widgetY, width: s.widgetWidth, height: s.widgetHeight }, true); } catch (err) {}
+    }
   });
+
   widgetWin.on('close', (e) => { if (quitting) return; e.preventDefault(); widgetWin.hide(); });
   return widgetWin;
 }
@@ -306,40 +311,112 @@ ipcMain.handle('ui:openSetup', () => { createSetupWindow(); return true; });
 ipcMain.handle('ui:openPopup', (e, date) => { openPopup(String(date)); return true; });
 ipcMain.handle('widget:show', () => { createWidgetWindow(); return true; });
 ipcMain.handle('widget:hide', () => { if (widgetWin) widgetWin.hide(); return true; });
-ipcMain.handle('widget:setBounds', (e, opts) => {
-  if (!widgetWin) return true;
-  const o = opts || {};
-  const b = widgetWin.getBounds();
-  const { workArea } = screen.getPrimaryDisplay();
-  const maxW = Math.max(560, workArea.width - 40);
-  const maxH = Math.floor(workArea.height * 0.8);
-  let w = (o.width != null) ? Math.max(560, Math.min(Math.round(o.width), maxW)) : b.width;
-  let h = (o.height != null) ? Math.max(120, Math.min(Math.round(o.height), maxH)) : b.height;
-  let x = (o.x != null) ? o.x : b.x;
-  let y = (o.y != null) ? o.y : b.y;
-  if (o.width != null) { const rw = Math.round(o.width); if (rw !== w) x += (rw - w); }
-  if (o.height != null) { const rh = Math.round(o.height); if (rh !== h) y += (rh - h); }
-  x = Math.min(Math.max(x, workArea.x), workArea.x + workArea.width - w);
-  y = Math.min(Math.max(y, workArea.y), workArea.y + workArea.height - h);
-  widgetWin.setBounds({ x: x, y: y, width: w, height: h });
-  if (o.persist) {
-    data.settings.widgetX = x; data.settings.widgetY = y;
-    data.settings.widgetWidth = w; data.settings.widgetHeight = h;
-    saveData();
+// 点击穿透：主进程每 50ms 轮询光标，命中交互区矩形才取消穿透（不依赖渲染进程的鼠标事件转发，转发在本机不可用）
+let interactiveAreas = [];
+let forceInteractive = false;
+let lastIgnored = null;
+function tickClickThrough() {
+  if (!widgetWin || widgetWin.isDestroyed()) return;
+  let interactive = forceInteractive;
+  if (!interactive) {
+    const b = widgetWin.getBounds();
+    const pt = screen.getCursorScreenPoint();
+    const rx = pt.x - b.x, ry = pt.y - b.y;
+    if (rx >= 0 && ry >= 0 && rx <= b.width && ry <= b.height) {
+      for (const a of interactiveAreas) {
+        if (rx >= a.x && rx <= a.x + a.w && ry >= a.y && ry <= a.y + a.h) { interactive = true; break; }
+      }
+    }
   }
+  const ignored = !interactive;
+  if (ignored !== lastIgnored) {
+    lastIgnored = ignored;
+    widgetWin.setIgnoreMouseEvents(ignored);
+  }
+}
+ipcMain.handle('widget:setInteractiveAreas', (e, areas) => {
+  interactiveAreas = Array.isArray(areas) ? areas : [];
   return true;
+});
+ipcMain.handle('widget:setDragActive', (e, on) => { forceInteractive = !!on; return true; });
+// ---------------- 挂件边界管理 ----------------
+// 实测：Windows 非 100% 缩放（如 125%）下，setBounds 传入的 DIP 与 getBounds 读回值存在 ±1~2 的确定性偏差；
+// 若把"读回的膨胀值"当新目标写回，会形成自我放大循环（挂件每次拖拽变宽、最终飞走）。
+// 对策：始终以 getBounds 读回的真实值为基准；目标与现状相同则跳过 setBounds；
+// 需要精确落位时做"两步校正"（先写目标→读回差值→反向补偿一次），使窗口实际边界与目标完全一致。
+let widgetBoundsReal = null;
+function readWidgetBounds() {
+  if (!widgetWin) return null;
+  const b = widgetWin.getBounds();
+  widgetBoundsReal = { x: b.x, y: b.y, width: b.width, height: b.height };
+  return widgetBoundsReal;
+}
+function persistWidgetBounds(b) {
+  data.settings.widgetX = b.x; data.settings.widgetY = b.y;
+  data.settings.widgetWidth = b.width; data.settings.widgetHeight = b.height;
+  saveData();
+}
+function clampWidgetBounds(o) {
+  const b = widgetBoundsReal || readWidgetBounds();
+  const disp = screen.getDisplayMatching({ x: b.x, y: b.y, width: b.width, height: b.height });
+  const { workArea } = disp;
+  const maxW = Math.max(560, Math.round(workArea.width - 40));
+  const maxH = Math.max(120, Math.floor(workArea.height * 0.8));
+  const s = (o.start && typeof o.start.w === 'number') ? o.start : { x: b.x, y: b.y, w: b.width, h: b.height };
+  const edge = o.edge || '';
+  let w = (o.width != null) ? Math.round(o.width) : b.width;
+  let h = (o.height != null) ? Math.round(o.height) : b.height;
+  let x = (o.x != null) ? Math.round(o.x) : b.x;
+  let y = (o.y != null) ? Math.round(o.y) : b.y;
+  w = Math.max(560, Math.min(w, maxW));
+  h = Math.max(120, Math.min(h, maxH));
+  // 缩放：锚定被拖边的对边；宽高被钳制时对边保持不动，窗口不跳变、不飞出屏幕
+  if (edge.includes('l')) { w = Math.min(w, s.x + s.w - workArea.x); x = s.x + s.w - w; }
+  else if (edge.includes('r')) { w = Math.min(w, workArea.x + workArea.width - s.x); x = s.x; }
+  if (edge.includes('t')) { h = Math.min(h, s.y + s.h - workArea.y); y = s.y + s.h - h; }
+  else if (edge.includes('b')) { h = Math.min(h, workArea.y + workArea.height - s.y); y = s.y; }
+  if (!edge) {
+    x = Math.min(Math.max(x, workArea.x), workArea.x + workArea.width - w);
+    y = Math.min(Math.max(y, workArea.y), workArea.y + workArea.height - h);
+  }
+  return { x, y, width: w, height: h };
+}
+function applyWidgetBounds(target, correct) {
+  widgetWin.setBounds(target);
+  let applied = readWidgetBounds();
+  if (correct) {
+    const dx = target.x - applied.x, dy = target.y - applied.y;
+    const dw = target.width - applied.width, dh = target.height - applied.height;
+    if (dx || dy || dw || dh) {
+      const adj = clampWidgetBounds({ x: target.x + dx, y: target.y + dy, width: target.width + dw, height: target.height + dh });
+      widgetWin.setBounds(adj);
+      applied = readWidgetBounds();
+    }
+  }
+  return applied;
+}
+ipcMain.handle('widget:getBounds', () => readWidgetBounds());
+ipcMain.handle('widget:setBounds', (e, opts) => {
+  if (!widgetWin) return { applied: null };
+  const o = opts || {};
+  const target = clampWidgetBounds(o);
+  const cur = widgetBoundsReal || readWidgetBounds();
+  const same = target.x === cur.x && target.y === cur.y && target.width === cur.width && target.height === cur.height;
+  let applied;
+  if (same && !o.correct) {
+    applied = cur;
+  } else {
+    applied = applyWidgetBounds(target, !!o.correct);
+  }
+  if (o.persist) persistWidgetBounds(applied);
+  return { applied, target, changed: !same };
 });
 ipcMain.handle('widget:snapCorner', (e, corner) => {
   if (!widgetWin) return true;
-  const b = widgetWin.getBounds();
+  const b = readWidgetBounds();
   const p = anchorPos(b.width, b.height, corner);
-  widgetWin.setPosition(p.x, p.y);
-  data.settings.widgetX = p.x; data.settings.widgetY = p.y;
-  saveData();
-  return true;
-});
-ipcMain.handle('widget:clickThrough', (e, on) => {
-  if (widgetWin) widgetWin.setIgnoreMouseEvents(!!on, { forward: true });
+  const applied = applyWidgetBounds({ x: p.x, y: p.y, width: b.width, height: b.height }, true);
+  persistWidgetBounds(applied);
   return true;
 });
 ipcMain.handle('settings:autostart', (e, on) => { setAutostart(!!on); return data.settings.autostart; });
@@ -380,6 +457,7 @@ app.whenReady().then(() => {
   } else {
     createWidgetWindow();
   }
+  setInterval(tickClickThrough, 50);
   setInterval(() => checkReminders(false), 30000);
   checkBells();
   setInterval(() => checkBells(), 10000);
