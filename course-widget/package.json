@@ -7,8 +7,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win portable",
-    "dist:installer": "electron-builder --win nsis",
+    "dist": "electron-builder --win portable --config.electronDist=node_modules/electron/dist",
+    "dist:installer": "electron-builder --win nsis --config.electronDist=node_modules/electron/dist",
     "helper:build": "powershell -NoProfile -ExecutionPolicy Bypass -File build-helper.ps1"
   },
   "devDependencies": {
