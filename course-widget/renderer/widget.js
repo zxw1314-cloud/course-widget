@@ -100,12 +100,12 @@ function renderWeek(containerId, startDate, count, isThisWeek, todayKey) {
         const style = it.color ? ` style="background:${hexToRgba(it.color, 0.16)};border-left:3px solid ${hexToRgba(it.color, 0.85)}"` : '';
         let body;
         if (it.merged) {
-          // 连堂课大框：起始时间在上、结束时间在下、节数徽标
-          body = `<span class="mstart">${esc(it.startT)}</span><span class="msep">↓</span><span class="mend">${esc(it.endT)}</span><span class="mname">${esc(it.name)}<span class="mcnt">×${it.count}</span></span>`;
+          // 连堂课大框两栏：左=起止时间竖排，右=课程名+节数徽标+地点（省垂直空间）
+          body = `<span class="mtime"><span class="mstart">${esc(it.startT)}</span><span class="msep">↓</span><span class="mend">${esc(it.endT)}</span></span><span class="minfo"><span class="mname">${esc(it.name)}<span class="mcnt">×${it.count}</span></span>${loc}</span>`;
         } else {
           body = tm + esc(it.name);
         }
-        return `<div class="${cls}"${titleAttr}${style}>${body}${loc}</div>`;
+        return `<div class="${cls}"${titleAttr}${style}>${body}${it.merged ? '' : loc}</div>`;
       }).join('') + (items.length > 12 ? `<div class="it" style="color:#7d86a3">+${items.length - 12}</div>` : '') + '</div>';
     }
     col.innerHTML = head + itemsHtml + `<button class="add" title="查看/添加 ${key} 的安排">+</button>`;
