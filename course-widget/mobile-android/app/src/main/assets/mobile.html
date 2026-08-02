@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>桌面课表 · 手机端（本地版）</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; background: #0e1220; color: #eef1f8; min-height: 100vh; padding: env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 12px); }
+h1 { font-size: 18px; margin: 14px 2px 4px; }
+.sub { color: #7d86a3; font-size: 12px; margin: 0 2px 14px; }
+.mode-tag { display: inline-block; padding: 1px 8px; border-radius: 8px; background: rgba(64,128,255,.25); color: #cfe0ff; font-size: 11px; margin-left: 6px; }
+.card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+.card h2 { font-size: 14px; margin-bottom: 8px; color: #cfe0ff; }
+.tabs { display: flex; gap: 6px; margin: 10px 0; position: sticky; top: 0; background: #0e1220; padding: 6px 0; z-index: 5; }
+.tabs button { flex: 1; padding: 9px 0; border: none; border-radius: 8px; background: rgba(255,255,255,0.06); color: #aab2c8; font-size: 14px; cursor: pointer; }
+.tabs button.on { background: #4080ff; color: #fff; font-weight: 600; }
+.panel { display: none; } .panel.on { display: block; }
+.item { display: flex; gap: 8px; align-items: baseline; padding: 6px 2px; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: 13px; }
+.item .tm { color: #9fb0d6; font-size: 12px; flex: 0 0 auto; min-width: 46px; }
+.item .txt { flex: 1; min-width: 0; }
+.item .loc { color: #7d86a3; font-size: 11px; }
+.todo.done { text-decoration: line-through; opacity: .5; }
+input { width: 100%; padding: 9px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #eef1f8; font-size: 14px; margin: 5px 0; }
+.row { display: flex; gap: 8px; } .row > * { flex: 1; }
+button.act { width: 100%; padding: 11px; border: none; border-radius: 10px; background: #4080ff; color: #fff; font-size: 15px; font-weight: 600; margin-top: 8px; cursor: pointer; }
+button.ghost { background: rgba(255,255,255,0.08); color: #cfe0ff; }
+#outbox { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(246,200,95,0.12); border: 1px solid rgba(246,200,95,0.35); color: #ffd76a; font-size: 12px; }
+.empty { color: #66708a; text-align: center; padding: 14px 0; font-size: 13px; }
+.hint { color: #7d86a3; font-size: 12px; line-height: 1.7; margin-top: 8px; }
+.dayhead { font-size: 13px; font-weight: 600; color: #ffd76a; margin: 12px 2px 4px; }
+.set-label { font-size: 12px; color: #9fb0d6; margin: 10px 0 0; }
+#setStatus { font-size: 13px; margin-top: 10px; color: #9fb0d6; line-height: 1.8; }
+#flash { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); background: rgba(64,128,255,.92); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 9; white-space: nowrap; }
+#flash.show { opacity: 1; }
+</style>
+</head>
+<body>
+<h1>桌面课表<span class="mode-tag">本地版</span></h1>
+<div class="sub">课表存在手机本机 · 连上电脑后手动同步/上传</div>
+
+<div class="tabs">
+  <button id="tabToday" class="on" onclick="goto('today')">今日</button>
+  <button id="tabWeek" onclick="goto('week')">本周</button>
+  <button id="tabAdd" onclick="goto('add')">加待办</button>
+  <button id="tabSet" onclick="goto('settings')">设置</button>
+</div>
+
+<div id="panelToday" class="panel on">
+  <div class="card"><h2>课程</h2><div id="cList"></div></div>
+  <div class="card"><h2>待办</h2><div id="tList"></div></div>
+  <div class="card"><h2>活动</h2><div id="eList"></div></div>
+  <div class="card"><h2>倒数日</h2><div id="cdList"></div></div>
+</div>
+
+<div id="panelWeek" class="panel">
+  <div class="card"><div id="weekList"></div></div>
+</div>
+
+<div id="panelAdd" class="panel">
+  <div class="card">
+    <h2>新增待办（先存手机，连上电脑后自动上传）</h2>
+    <input id="inText" placeholder="待办内容，如：交实验报告" autocomplete="off">
+    <div class="row">
+      <input id="inDate" type="date">
+      <input id="inTime" type="time" title="截止时间（可选）">
+    </div>
+    <input id="inPoints" type="number" min="0" value="10" title="提前多少分钟提醒（可选）">
+    <button class="act" id="btnSend" onclick="addTodo()">加入待办</button>
+    <div id="outbox" style="display:none"></div>
+  </div>
+</div>
+
+<div id="panelSet" class="panel">
+  <div class="card">
+    <h2>连接电脑（同步 / 上传）</h2>
+    <div class="set-label">服务器地址（局域网 http://192.168.x.x:8723；樱花隧道 https://IP:端口）</div>
+    <input id="setUrl" placeholder="http://192.168.x.x:8723" autocomplete="off">
+    <div class="set-label">访问令牌（电脑「设置 → 手机连接」里查看）</div>
+    <input id="setToken" placeholder="cw-xxxx" autocomplete="off">
+    <button class="act" onclick="saveSettings()">保存设置</button>
+    <div class="row" style="margin-top:12px">
+      <button class="act ghost" onclick="doSync()">同步到手机</button>
+      <button class="act ghost" onclick="flushOutbox(true)">立即上传</button>
+    </div>
+    <div id="setStatus"></div>
+  </div>
+  <div class="card">
+    <h2>说明</h2>
+    <div class="hint">
+      · 「同步」把电脑上的课表/活动/倒数日/待办拉到手机；待办会与手机里未上传的合并去重。<br>
+      · 「上传」把手机里新增的待办发给电脑；连不上会保留队列，进 App 或点「立即上传」自动补发。<br>
+      · 樱花隧道强制 HTTPS：填 http:// 会自动转 https 重试；证书不受信时本 App 已放行（个人工具 + 随机令牌）。<br>
+      · 手机端只能新增待办，不能删除（上传后由电脑管理）。
+    </div>
+  </div>
+</div>
+
+<div id="flash"></div>
+
+<script>
+var SERVER_KEY = 'cw_server';
+var SNAP_KEY = 'cw_schedule';
+var OUTBOX_KEY = 'cw_outbox';
+function $(id) { return document.getElementById(id); }
+function todayStr() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+function fmtTime(ts) { if (!ts) return '-'; var d = new Date(ts); function p(n){ return String(n).padStart(2,'0'); } return p(d.getMonth()+1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+var flashTimer = null;
+function flash(msg) { var el = $('flash'); el.textContent = msg; el.classList.add('show'); clearTimeout(flashTimer); flashTimer = setTimeout(function(){ el.classList.remove('show'); }, 1800); }
+function getServer() { try { return JSON.parse(localStorage.getItem(SERVER_KEY) || 'null'); } catch(e) { return null; } }
+function saveServer(s) { localStorage.setItem(SERVER_KEY, JSON.stringify(s)); }
+function getSnap() { try { return JSON.parse(localStorage.getItem(SNAP_KEY) || 'null'); } catch(e) { return null; } }
+function saveSnap(s) { s.syncedAt = Date.now(); localStorage.setItem(SNAP_KEY, JSON.stringify(s)); }
+function getOutbox() { try { return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]'); } catch(e) { return []; } }
+function saveOutbox(o) { localStorage.setItem(OUTBOX_KEY, JSON.stringify(o)); }
+function serverUrl() { var s = getServer(); return s && s.url ? s.url.replace(/\/+$/, '') : ''; }
+function apiFetch(path, opts) {
+  opts = opts || {};
+  var headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+  var s = getServer();
+  if (s && s.token) headers['Authorization'] = 'Bearer ' + s.token;
+  var url = serverUrl() + path;
+  function doFetch(u) { return fetch(u, Object.assign({ headers: headers }, opts)); }
+  return doFetch(url).then(function(r){
+    if (r.status === 501 && /^http:\/\//i.test(url)) return doFetch(url.replace(/^http:\/\//i, 'https://'));
+    return r;
+  });
+}
+function weekOk(c, week) { if (!c.weeks || !c.weeks.length) return true; if (week === null || week === undefined) return true; return c.weeks.indexOf(week) >= 0; }
+function weekdayNum() { var w = new Date().getDay(); return w === 0 ? 7 : w; }
+function weekdayName() { return '周' + ['日','一','二','三','四','五','六'][new Date().getDay()]; }
+var TAB_IDS = { today:['tabToday','panelToday'], week:['tabWeek','panelWeek'], add:['tabAdd','panelAdd'], settings:['tabSet','panelSet'] };
+function goto(which) {
+  for (var k in TAB_IDS) { var on = k === which; $(TAB_IDS[k][0]).classList.toggle('on', on); $(TAB_IDS[k][1]).classList.toggle('on', on); }
+  if (which === 'today') renderToday();
+  if (which === 'week') renderWeek();
+  if (which === 'settings') renderSettings();
+}
+function todayCourses(snap) {
+  var wk = weekdayNum(), week = snap ? snap.weekNumber : null;
+  return (snap && snap.courses ? snap.courses : []).filter(function(c){ return c.day === wk && weekOk(c, week); }).sort(function(a,b){ return a.period - b.period; });
+}
+function renderToday() {
+  var snap = getSnap();
+  var list = $('cList'), t = $('tList'), e = $('eList'), cd = $('cdList');
+  if (!snap || !snap.courses) {
+    list.innerHTML = t.innerHTML = e.innerHTML = cd.innerHTML = '<div class="empty">还没同步过课表：去「设置」填服务器地址并点同步</div>';
+    return;
+  }
+  var cs = todayCourses(snap);
+  list.innerHTML = cs.length ? cs.map(function(c){ return '<div class="item"><span class="tm">' + esc(c.start) + '</span><span class="txt">' + esc(c.abbr || c.name) + '</span>' + (c.location ? '<span class="loc"> ' + esc(c.location) + '</span>' : '') + '</div>'; }).join('') : '<div class="empty">今天没课</div>';
+  var tk = todayStr();
+  var todos = (snap.todos && snap.todos[tk]) || [];
+  t.innerHTML = todos.length ? todos.map(function(x){ return '<div class="item todo' + (x.done ? ' done' : '') + '"><span class="tm">' + (x.deadline ? esc(x.deadline) : '') + '</span><span class="txt">' + esc(x.text) + '</span></div>'; }).join('') : '<div class="empty">暂无待办</div>';
+  var evs = (snap.events || []).filter(function(x){ return x.date === tk; });
+  e.innerHTML = evs.length ? evs.map(function(x){ return '<div class="item"><span class="tm">' + (x.time ? esc(x.time) : '全天') + '</span><span class="txt">' + esc(x.title) + '</span>' + (x.location ? '<span class="loc"> ' + esc(x.location) + '</span>' : '') + '</div>'; }).join('') : '<div class="empty">暂无活动</div>';
+  var cds = (snap.countdowns || []).filter(function(x){ return x.date && x.date >= tk; }).sort(function(a,b){ return a.date.localeCompare(b.date); }).slice(0, 3);
+  cd.innerHTML = cds.length ? cds.map(function(x){ var days = Math.round((new Date(x.date) - new Date(tk)) / 86400000); return '<div class="item"><span class="tm">' + (days === 0 ? '就是今天' : '还有 ' + days + ' 天') + '</span><span class="txt">' + esc(x.title) + (x.time ? ' ' + esc(x.time) : '') + '</span>' + (x.location ? '<span class="loc"> ' + esc(x.location) + '</span>' : '') + '</div>'; }).join('') : '<div class="empty">暂无倒数日</div>';
+}
+function renderWeek() {
+  var snap = getSnap();
+  var box = $('weekList');
+  if (!snap || !snap.courses) { box.innerHTML = '<div class="empty">还没同步过课表：去「设置」填服务器地址并点同步</div>'; return; }
+  var week = snap.weekNumber;
+  var names = ['周一','周二','周三','周四','周五','周六','周日'];
+  var html = '<div class="hint">当前第 ' + (week ? week : '?') + ' 周（以最后一次同步为准）</div>';
+  for (var i = 1; i <= 7; i++) {
+    var cs = snap.courses.filter(function(c){ return c.day === i && weekOk(c, week); }).sort(function(a,b){ return a.period - b.period; });
+    html += '<div class="dayhead">' + names[i-1] + '</div>';
+    html += cs.length ? cs.map(function(c){ return '<div class="item"><span class="tm">' + esc(c.start) + '~' + esc(c.end) + '</span><span class="txt">' + esc(c.abbr || c.name) + '</span>' + (c.location ? '<span class="loc"> ' + esc(c.location) + '</span>' : '') + '</div>'; }).join('') : '<div class="empty">无课</div>';
+  }
+  box.innerHTML = html;
+}
+function addTodo() {
+  var text = $('inText').value.trim();
+  if (!text) { alert('请输入待办内容'); return; }
+  var date = $('inDate').value || todayStr();
+  var deadline = $('inTime').value || null;
+  var points = $('inPoints').value ? parseInt($('inPoints').value, 10) : 10;
+  var item = { text: text, date: date, deadline: deadline, points: points, createdAt: Date.now() };
+  var snap = getSnap();
+  if (snap) {
+    if (!snap.todos) snap.todos = {};
+    if (!snap.todos[date]) snap.todos[date] = [];
+    snap.todos[date].push({ id: 'local-' + item.createdAt, text: text, deadline: deadline, done: false });
+    saveSnap(snap);
+  }
+  var out = getOutbox(); out.push(item); saveOutbox(out);
+  $('inText').value = ''; $('inTime').value = '';
+  renderOutbox();
+  flash('已加入待办（' + out.length + ' 条待上传）');
+  flushOutbox();
+}
+function renderOutbox() {
+  var out = getOutbox();
+  var box = $('outbox');
+  if (!out.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  box.innerHTML = '待上传 ' + out.length + ' 条 · <a href="javascript:void(0)" onclick="flushOutbox(true)" style="color:#ffd76a">立即上传</a>';
+}
+function flushOutbox(manual) {
+  var out = getOutbox();
+  if (!out.length) { renderOutbox(); if (manual) flash('没有待上传的内容'); return; }
+  if (!serverUrl()) { renderOutbox(); if (manual) alert('请先在「设置」填服务器地址'); return; }
+  var okIds = {};
+  var authErr = false;
+  var chain = Promise.resolve();
+  out.forEach(function(item){
+    chain = chain.then(function(){
+      return apiFetch('/api/todo', { method: 'POST', body: JSON.stringify({ text: item.text, date: item.date, deadline: item.deadline || null, points: [item.points || 10] }) }).then(function(r){
+        if (r.status === 401) { authErr = true; return; }
+        if (r.ok) okIds[item.createdAt] = true;
+      }).catch(function(){});
+    });
+  });
+  chain.then(function(){
+    if (authErr) { alert('令牌无效，请到「设置」检查令牌'); goto('settings'); return; }
+    var left = getOutbox().filter(function(x){ return !okIds[x.createdAt]; });
+    saveOutbox(left);
+    renderOutbox();
+    var sent = out.length - left.length;
+    if (sent > 0) flash('已上传 ' + sent + ' 条');
+  });
+}
+function setStatus(msg) { $('setStatus').innerHTML = '<div>' + esc(msg) + '</div>'; }
+function doSync() {
+  if (!serverUrl()) { alert('请先在「设置」填服务器地址'); return; }
+  setStatus('同步中…');
+  apiFetch('/api/schedule').then(function(r){
+    if (r.status === 401) { setStatus('令牌无效（401），请到设置检查令牌'); goto('settings'); return null; }
+    if (!r.ok) { setStatus('同步失败：HTTP ' + r.status); return null; }
+    return r.json();
+  }).then(function(d){
+    if (!d) return;
+    var out = getOutbox();
+    if (out.length) {
+      if (!d.todos) d.todos = {};
+      out.forEach(function(item){
+        var arr = d.todos[item.date] || (d.todos[item.date] = []);
+        var dup = arr.some(function(t){ return t.text === item.text && (t.deadline || null) === (item.deadline || null); });
+        if (!dup) arr.push({ id: 'local-' + item.createdAt, text: item.text, deadline: item.deadline || null, done: false });
+      });
+    }
+    saveSnap(d);
+    renderToday(); renderWeek(); renderSettings();
+    setStatus('同步成功：第 ' + (d.weekNumber || '?') + ' 周 · ' + fmtTime(d.syncedAt) + ' 拉取');
+    flash('同步成功');
+  }).catch(function(){
+    setStatus('连接失败，已保留手机本地数据。樱花隧道请确认填 https:// 地址');
+  });
+}
+function saveSettings() {
+  var url = $('setUrl').value.trim();
+  var token = $('setToken').value.trim();
+  if (!url) { alert('请输入服务器地址'); return; }
+  if (!/^https?:\/\//i.test(url)) url = 'http://' + url;
+  saveServer({ url: url.replace(/\/+$/, ''), token: token });
+  renderSettings();
+  flash('已保存');
+  flushOutbox();
+}
+function renderSettings() {
+  var s = getServer();
+  if (s) { $('setUrl').value = s.url || ''; $('setToken').value = s.token || ''; }
+  var snap = getSnap();
+  var out = getOutbox();
+  var lines = [];
+  lines.push('服务器：' + (s && s.url ? esc(s.url) : '未设置'));
+  lines.push('上次同步：' + (snap && snap.syncedAt ? fmtTime(snap.syncedAt) : '从未同步'));
+  lines.push('本地课表：' + (snap && snap.courses ? ('第 ' + (snap.weekNumber || '?') + ' 周 · ' + snap.courses.length + ' 门课') : '无'));
+  lines.push('待上传：' + out.length + ' 条');
+  $('setStatus').innerHTML = lines.map(function(x){ return '<div>' + x + '</div>'; }).join('');
+}
+function boot() {
+  $('inDate').value = todayStr();
+  renderToday(); renderWeek(); renderOutbox(); renderSettings();
+  goto('today');
+  flushOutbox();
+  setInterval(flushOutbox, 20000);
+}
+boot();
+</script>
+</body>
+</html>

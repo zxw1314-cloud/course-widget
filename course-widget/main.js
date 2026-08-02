@@ -315,9 +315,16 @@ function genMobileToken() { return 'cw-' + crypto.randomBytes(18).toString('base
 function loadMobilePage() {
   try { mobilePageHtml = fs.readFileSync(path.join(__dirname, 'renderer', 'mobile.html'), 'utf8'); } catch (e) { mobilePageHtml = '<h1>mobile.html 缺失</h1>'; }
 }
+// mobile bridge CORS: allow bundled APK page (file:// origin) to call this server cross-origin
+const MOBILE_CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400'
+};
 function sendJson(res, code, obj) {
   const s = JSON.stringify(obj);
-  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.writeHead(code, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, MOBILE_CORS));
   res.end(s);
 }
 function mobileAuthOk(req) {
@@ -359,7 +366,37 @@ function todayPayload() {
     .slice(0, 3);
   return { date: tk, weekday: '周' + ['日','一','二','三','四','五','六'][now.getDay()], courses, todos, events, countdowns };
 }
+function schedulePayload() {
+  // full snapshot for the phone's local copy (today / this-week / add-todo / settings-sync)
+  const now = new Date();
+  const tk = dateKey(now);
+  const week = currentWeek();
+  const abbrMap = data.settings.courseAbbr || {};
+  const courses = [];
+  for (const c of data.courses) {
+    const p = data.periods.find(x => x.index === c.period);
+    if (!p) continue;
+    courses.push({ id: c.id, name: c.name, abbr: abbrMap[c.name] || c.name, day: c.day, period: c.period, weeks: c.weeks || null, start: p.start, end: p.end, location: c.location || null });
+  }
+  courses.sort((a, b) => a.day - b.day || a.period - b.period);
+  const todos = {};
+  for (const [date, list] of Object.entries(data.todos || {})) {
+    todos[date] = (list || []).map(t => ({ id: t.id, text: t.text, deadline: t.deadline || null, done: !!t.done }));
+  }
+  return {
+    date: tk,
+    weekday: '\u5468' + ['\u65e5','\u4e00','\u4e8c','\u4e09','\u56db','\u4e94','\u516d'][now.getDay()],
+    weekNumber: week,
+    periods: (data.periods || []).map(p => ({ index: p.index, start: p.start, end: p.end })),
+    courseAbbr: abbrMap,
+    courses,
+    events: (data.events || []).map(e => ({ id: e.id, title: e.title, date: e.date, time: e.time || null, location: e.location || null })),
+    countdowns: (data.countdowns || []).map(c => ({ id: c.id, title: c.title, date: c.date, time: c.time || null, location: c.location || null, color: c.color || null })),
+    todos
+  };
+}
 function handleMobileRequest(req, res) {
+  if (req.method === 'OPTIONS') { res.writeHead(204, MOBILE_CORS); res.end(); return; }
   let pathname = '';
   try { pathname = new URL(req.url, 'http://x').pathname; } catch (e) { pathname = '/'; }
   // 网页界面
@@ -368,7 +405,7 @@ function handleMobileRequest(req, res) {
     if (mode === 'app') { sendJson(res, 403, { error: '当前设置为仅 App 模式，请在电脑设置中开放网页模式' }); return; }
     if (mobilePageHtml == null) loadMobilePage();
     const page = mobilePageHtml.replace('__CW_MODE__', mode);
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.writeHead(200, Object.assign({ 'Content-Type': 'text/html; charset=utf-8' }, MOBILE_CORS));
     res.end(page);
     return;
   }
@@ -376,6 +413,7 @@ function handleMobileRequest(req, res) {
   if (req.method === 'GET' && pathname === '/api/health') { sendJson(res, 200, { ok: true, app: 'course-widget', time: new Date().toISOString() }); return; }
   if (!mobileAuthOk(req)) { sendJson(res, 401, { error: 'unauthorized' }); return; }
   if (req.method === 'GET' && pathname === '/api/today') { sendJson(res, 200, todayPayload()); return; }
+  if (req.method === 'GET' && pathname === '/api/schedule') { sendJson(res, 200, schedulePayload()); return; }
   if (req.method === 'POST' && pathname === '/api/todo') {
     let body = '';
     req.on('data', (c) => { body += c; if (body.length > 16384) req.destroy(); });
