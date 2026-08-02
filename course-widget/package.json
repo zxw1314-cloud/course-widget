@@ -3,12 +3,33 @@
   "productName": "桌面课表备忘录",
   "version": "0.1.0",
   "description": "每周课表 + 上课提醒 + 临时活动 + 半透明壁纸挂件（点击日期添加待办）",
+  "author": "Czj30",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "dist": "electron-builder --win portable",
+    "dist:installer": "electron-builder --win nsis",
     "helper:build": "powershell -NoProfile -ExecutionPolicy Bypass -File build-helper.ps1"
   },
   "devDependencies": {
-    "electron": "^43.2.0"
+    "electron": "^43.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.course-widget.desktop",
+    "productName": "桌面课表备忘录",
+    "directories": { "output": "dist" },
+    "files": [ "main.js", "preload.js", "renderer/**/*", "assets/**/*", "package.json" ],
+    "win": {
+      "target": [ "portable", "nsis" ],
+      "icon": "assets/icon.png"
+    },
+    "portable": { "artifactName": "course-widget-${version}-portable.exe" },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "artifactName": "course-widget-${version}-setup.exe"
+    }
   }
 }

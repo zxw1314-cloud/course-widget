@@ -215,6 +215,8 @@ function weekMatches(course, week) {
 function notify(title, body) {
   if (!Notification.isSupported()) return;
   try { new Notification({ title, body, icon: ICON }).show(); } catch (e) {}
+  // 弹通知时同时播放提示音（开启"提醒声音"时生效），防止错过系统通知
+  if (data.settings.bellEnabled) sendBell('remind');
 }
 function fireReminders(nowMin, todayKey, prefix, startMin, reminders, title, bodyFn) {
   if (startMin == null) return;
@@ -287,35 +289,13 @@ function checkReminders(force) {
 }
 
 // ---------------- 上下课铃声 ----------------
-let bellFired = new Set();
-let bellDay = '';
 function sendBell(kind) {
   if (!data.settings.bellEnabled) return;
-  if (widgetWin && !widgetWin.isDestroyed()) {
-    try { widgetWin.webContents.send('bell:ring', kind); } catch (e) {}
+  const targets = [widgetWin, setupWin].filter(w => w && !w.isDestroyed());
+  for (const w of targets) {
+    try { w.webContents.send('bell:ring', kind); } catch (e) {}
   }
 }
-function checkBells() {
-  const now = new Date();
-  const todayKey = dateKey(now);
-  if (todayKey !== bellDay) { bellFired.clear(); bellDay = todayKey; }
-  const hm = pad(now.getHours()) + ':' + pad(now.getMinutes());
-  const wk = weekdayIndex(now);
-  const week = currentWeek();
-  for (const p of data.periods) {
-    const c = data.courses.find(x => x.day === wk && x.period === p.index && weekMatches(x, week));
-    if (!c) continue;
-    if (p.start === hm) {
-      const k = todayKey + ':p' + p.index + ':start';
-      if (!bellFired.has(k)) { bellFired.add(k); sendBell('on'); }
-    }
-    if (p.end === hm) {
-      const k = todayKey + ':p' + p.index + ':end';
-      if (!bellFired.has(k)) { bellFired.add(k); sendBell('off'); }
-    }
-  }
-}
-
 // 数据变更后推送给挂件渲染进程，让挂件即时刷新（不再等 30 秒轮询）
 function broadcastDataChanged() {
   if (widgetWin && !widgetWin.isDestroyed()) {
@@ -496,6 +476,4 @@ app.whenReady().then(() => {
   }
   setInterval(tickClickThrough, 50);
   setInterval(() => checkReminders(false), 30000);
-  checkBells();
-  setInterval(() => checkBells(), 10000);
 });

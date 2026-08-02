@@ -173,13 +173,13 @@ hr { border: none; border-top: 1px dashed #e3e6ef; margin: 10px 0; }
       <label><input id="setAutostart" type="checkbox"> 开机自启</label>
       <label><input id="setShowCountdown" type="checkbox"> 挂件显示倒数日</label>
       <hr>
-      <h3>上下课铃声（到点播放提示音，参考 study-desk 实现）</h3>
-      <label><input id="setBell" type="checkbox"> 启用上下课铃声</label>
-      <label>铃声 <select id="setBellPreset" style="width:180px"></select>
+      <h3>提醒声音（弹系统通知时同时播放提示音，防止错过）</h3>
+      <label><input id="setBell" type="checkbox"> 弹通知时播放提示音</label>
+      <label>提示音 <select id="setBellPreset" style="width:180px"></select>
         <button class="ghost small" id="btnTestBell">试听</button>
       </label>
       <label>音量 <input id="setBellVolume" type="range" min="0" max="100" value="80" style="width:160px;vertical-align:middle"> <span id="bellVolLabel">80%</span></label>
-      <p style="color:#9aa1b2;font-size:12px;margin:4px 0 0">到上课/下课时间播放所选铃声；原有系统通知提醒保持不变。</p>
+      <p style="color:#9aa1b2;font-size:12px;margin:4px 0 0">课程/待办/活动/考试提醒弹系统通知时，同时播放所选提示音；关闭后只弹通知、不响铃。</p>
       <div class="row">
         <button class="ghost" id="btnTestNotify">测试提醒</button>
         <button class="ghost" id="btnExport">导出备份</button>
