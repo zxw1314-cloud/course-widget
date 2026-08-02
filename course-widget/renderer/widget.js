@@ -58,6 +58,7 @@ function dayItems(date, isThisWeek) {
       list.push({
         kind: 'course', startMin: toMinutes(p0.start), endMin: toMinutes(last.end),
         time: merged ? p0.start + '~' + last.end : p0.start,
+        startT: p0.start, endT: last.end, count: j - i + 1,
         name: abbrMap[c.name] || c.name, full: c.name,
         loc: locs.join(' / '), teacher: c.teacher || '',
         done: false, color: c.color || null, merged,
@@ -92,12 +93,19 @@ function renderWeek(containerId, startDate, count, isThisWeek, todayKey) {
       itemsHtml = '<div class="empty">—</div>';
     } else {
       itemsHtml = '<div class="ditems">' + items.slice(0, 12).map(it => {
-        const cls = 'it ' + it.kind + (it.done ? ' done' : '') + (it.current ? ' now' : '');
+        const cls = 'it ' + it.kind + (it.done ? ' done' : '') + (it.current ? ' now' : '') + (it.merged ? ' merged m-' + (it.count || 2) : '');
         const tm = it.time ? `<span class="tm">${esc(it.time)}</span>` : '';
         const loc = (it.kind === 'course' && it.loc) ? `<span class="loc"${it.teacher ? ` title="${esc(it.teacher)}"` : ''}>📍 ${esc(it.loc)}</span>` : '';
         const titleAttr = (it.kind === 'course' && it.full && it.full !== it.name) ? ` title="${esc(it.full)}"` : '';
         const style = it.color ? ` style="background:${hexToRgba(it.color, 0.16)};border-left:3px solid ${hexToRgba(it.color, 0.85)}"` : '';
-        return `<div class="${cls}"${titleAttr}${style}>${tm}${esc(it.name)}${loc}</div>`;
+        let body;
+        if (it.merged) {
+          // 连堂课大框：起始时间在上、结束时间在下、节数徽标
+          body = `<span class="mstart">${esc(it.startT)}</span><span class="msep">↓</span><span class="mend">${esc(it.endT)}</span><span class="mname">${esc(it.name)}<span class="mcnt">×${it.count}</span></span>`;
+        } else {
+          body = tm + esc(it.name);
+        }
+        return `<div class="${cls}"${titleAttr}${style}>${body}${loc}</div>`;
       }).join('') + (items.length > 12 ? `<div class="it" style="color:#7d86a3">+${items.length - 12}</div>` : '') + '</div>';
     }
     col.innerHTML = head + itemsHtml + `<button class="add" title="查看/添加 ${key} 的安排">+</button>`;
