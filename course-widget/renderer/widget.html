@@ -7,7 +7,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { background: transparent; }
 body { font-family: "Microsoft YaHei", system-ui, sans-serif; color: #eef1f8; font-size: 12px; user-select: none; }
-#widget { position: relative; background: rgba(16, 20, 36, 0.66); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.13); border-radius: 14px; padding: 8px 10px 10px; margin: 2px; overflow: hidden; }
+#widget { position: relative; background: rgba(16, 20, 36, var(--widget-alpha, 0.66)); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.13); border-radius: 14px; padding: 8px 10px 10px; margin: 2px; overflow: hidden; }
 
 .head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 0 2px; }
 .head .range { font-weight: 700; font-size: 13px; white-space: nowrap; }

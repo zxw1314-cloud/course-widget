@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('api', {
   setDragActive: (on) => ipcRenderer.invoke('widget:setDragActive', on),
   getWidgetBounds: () => ipcRenderer.invoke('widget:getBounds'),
   setAutostart: (on) => ipcRenderer.invoke('settings:autostart', on),
+  setOpacity: (v) => ipcRenderer.invoke('settings:setOpacity', v),
+  onDataChanged: (cb) => { const h = () => cb(); ipcRenderer.on('data:changed', h); return () => ipcRenderer.removeListener('data:changed', h); },
   testNotify: () => ipcRenderer.invoke('notify:test'),
   exportData: () => ipcRenderer.invoke('data:export'),
   importData: () => ipcRenderer.invoke('data:import'),

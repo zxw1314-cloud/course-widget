@@ -31,7 +31,7 @@ function defaultData() {
   return {
     settings: {
       firstRun: true, widgetApplied: false, remindMinutes: 10,
-      semesterStart: null, showWeekStrip: true, clickThrough: false, autostart: false,
+      semesterStart: null, showWeekStrip: true, clickThrough: false, autostart: false, widgetOpacity: 0.66,
       widgetWidth: 900, widgetHeight: null, widgetX: null, widgetY: null, widgetCorner: 'bottomRight',
       bellEnabled: false, bellVolume: 0.8, bellPreset: 'school-bell', showCountdown: true
     },
@@ -52,6 +52,7 @@ function migrate(raw) {
   const d = defaultData();
   const out = Object.assign(d, raw, { settings: Object.assign(d.settings, raw.settings || {}) });
   // 旧字段迁移：remindMinutes -> reminders.points
+  out.periods = (out.periods || []).map(p => ({ index: p.index, label: p.label || ('第' + p.index + '节'), start: p.start, end: p.end }));
   out.courses = (out.courses || []).map(c => ({
     id: c.id, name: c.name, day: c.day, period: c.period, weeks: c.weeks || null, location: c.location || null,
     reminders: c.reminders || normReminders(c.remindMinutes),
@@ -69,7 +70,7 @@ function migrate(raw) {
   }
   out.countdowns = (out.countdowns || [])
     .map(cd => ({
-      id: cd.id, title: cd.title || '倒数日', date: cd.date || '', color: cd.color || null
+      id: cd.id, title: cd.title || '倒数日', date: cd.date || '', time: cd.time || null, location: cd.location || null, color: cd.color || null
     }))
     .filter(cd => !!cd.date);
   return out;
@@ -254,6 +255,14 @@ function checkReminders(force) {
       { now: '活动开始', before: '活动提醒' },
       () => ev.title + ' (' + ev.time + ')');
   }
+  for (const cd of (data.countdowns || [])) {
+    if (cd.date !== todayKey || !cd.time) continue;
+    const startMin = toMinutes(cd.time);
+    const mins = data.settings.remindMinutes != null ? data.settings.remindMinutes : 10;
+    fireReminders(nowMin, todayKey, 'cd:' + cd.id, startMin, { points: [mins], repeat: null },
+      { now: '考试开始', before: '考试提醒' },
+      () => (cd.title || '考试') + (cd.location ? ' @ ' + cd.location : '') + ' (' + cd.time + ')');
+  }
   for (const t of (data.todos[todayKey] || [])) {
     if (t.done || !t.deadline) continue;
     const startMin = toMinutes(t.deadline);
@@ -297,13 +306,20 @@ function checkBells() {
   }
 }
 
+// 数据变更后推送给挂件渲染进程，让挂件即时刷新（不再等 30 秒轮询）
+function broadcastDataChanged() {
+  if (widgetWin && !widgetWin.isDestroyed()) {
+    try { widgetWin.webContents.send('data:changed'); } catch (e) {}
+  }
+}
+
 // ---------------- IPC ----------------
 ipcMain.handle('data:get', () => data);
 ipcMain.handle('data:set', (e, next) => {
   if (next && typeof next === 'object') {
     data = migrate(Object.assign(defaultData(), next, { settings: Object.assign(defaultData().settings, next.settings || {}) }));
     if (data.settings.autostart !== app.getLoginItemSettings().openAtLogin) setAutostart(data.settings.autostart);
-    saveData(); rebuildTrayMenu();
+    saveData(); rebuildTrayMenu(); broadcastDataChanged();
   }
   return true;
 });
@@ -434,7 +450,7 @@ ipcMain.handle('data:import', async () => {
     const parsed = JSON.parse(fs.readFileSync(r.filePaths[0], 'utf8'));
     if (parsed && typeof parsed === 'object') {
       data = migrate(Object.assign(defaultData(), parsed, { settings: Object.assign(defaultData().settings, parsed.settings || {}) }));
-      saveData(); rebuildTrayMenu();
+      saveData(); rebuildTrayMenu(); broadcastDataChanged();
       return { ok: true, path: r.filePaths[0] };
     }
     return { ok: false, error: '文件格式不正确' };
@@ -443,6 +459,12 @@ ipcMain.handle('data:import', async () => {
 ipcMain.on('log:error', (e, m) => console.error('renderer error:', m));
 ipcMain.handle('app:quit', () => app.quit());
 
+ipcMain.handle('settings:setOpacity', (e, v) => {
+  const a = Math.max(0.2, Math.min(1, Number(v)));
+  data.settings.widgetOpacity = isNaN(a) ? 0.66 : a;
+  saveData(); broadcastDataChanged();
+  return data.settings.widgetOpacity;
+});
 app.on('second-instance', () => createSetupWindow());
 app.on('window-all-closed', () => {});
 app.on('before-quit', () => { quitting = true; if (tray) { tray.destroy(); tray = null; } });

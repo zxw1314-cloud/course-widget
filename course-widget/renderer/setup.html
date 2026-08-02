@@ -117,10 +117,12 @@ hr { border: none; border-top: 1px dashed #e3e6ef; margin: 10px 0; }
   </section>
   <section id="tab-countdown" class="hidden">
     <div class="card">
-      <h3>添加倒数日（考试、假期等，会显示在桌面挂件上）</h3>
+      <h3>添加倒数日（考试、假期等，会显示在桌面挂件上；考试可填时间与地点，到点提醒）</h3>
       <div class="row">
-        <input id="cdTitle" placeholder="名称，如：高考" style="flex:1;min-width:140px">
+        <input id="cdTitle" placeholder="名称，如：期末高数" style="flex:1;min-width:140px">
         <input id="cdDate" type="date">
+        <input id="cdTime" type="time" title="开始时间（考试等，可留空）">
+        <input id="cdLoc" placeholder="地点（可留空）" style="flex:1;min-width:120px">
         <select id="cdColor">
           <option value="">默认</option>
           <option value="#77b5e8">蓝</option>
@@ -140,6 +142,7 @@ hr { border: none; border-top: 1px dashed #e3e6ef; margin: 10px 0; }
       <label>默认提前提醒（分钟）<input id="setRemind" type="number" min="0" style="width:100px"></label>
       <label>开学日期（第1周周一，用于"周次"过滤）<input id="setSemester" type="date"></label>
       <label>挂件宽度（像素，560~1600）<input id="setWidth" type="number" min="560" max="1600" style="width:110px"></label>
+      <label>挂件不透明度 <input id="setOpacity" type="range" min="20" max="100" value="66" style="width:160px;vertical-align:middle"> <span id="opacityLabel">66%</span>（20%~100%，即时生效）</label>
       <label>挂件归位
         <button id="btnSnapBR" type="button">贴到右下角</button>
         <button id="btnSnapTR" type="button">贴到右上角</button>

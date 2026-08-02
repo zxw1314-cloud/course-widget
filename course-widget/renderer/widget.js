@@ -91,6 +91,9 @@ function renderWeek(containerId, startDate, count, isThisWeek, todayKey) {
 
 function render() {
   if (dragging) return; // 拖拽中不重建 DOM，避免 pointer capture 被释放导致拖拽卡死
+  // 挂件不透明度（0.2~1.0）
+  const op = data && data.settings ? Number(data.settings.widgetOpacity) : 0.66;
+  document.documentElement.style.setProperty('--widget-alpha', String(Math.max(0.2, Math.min(1, op || 0.66))));
   const now = new Date();
   const monday = mondayOf(now);
   const week1end = new Date(monday); week1end.setDate(monday.getDate() + 6);
@@ -169,7 +172,8 @@ function renderCountdowns() {
   box.innerHTML = items.map(x => {
     const color = x.cd.color ? ` style="color:${esc(x.cd.color)}"` : '';
     const label = x.days === 0 ? '就是今天' : `还有 ${x.days} 天`;
-    return `<span class="cd"${color}>🎯 ${esc(x.cd.title)} · ${label}</span>`;
+    const meta = [x.cd.time ? '🕒 ' + x.cd.time : '', x.cd.location ? '📍 ' + x.cd.location : ''].filter(Boolean).join(' · ');
+    return `<span class="cd"${color}>🎯 ${esc(x.cd.title)} · ${label}${meta ? ' · ' + esc(meta) : ''}</span>`;
   }).join('');
 }
 
@@ -267,6 +271,18 @@ $('btnGear').addEventListener('click', () => window.api.openSetup());
     const h = Math.min(document.body.scrollHeight + 4, Math.floor(window.screen.availHeight * 0.8));
     window.api.setWidgetBounds({ height: Math.round(h), persist: true });
   }
-  setInterval(async () => { data = await window.api.getData(); render(); }, 30000);
+  if (window.api.onDataChanged) {
+    // 防抖合并刷新：连续变更（如拖动透明度滑杆、批量编辑）只在停顿后拉一次最新数据，
+    // 避免并发 getData 乱序导致界面残留旧值；数据最终一定与主进程一致
+    let refreshTimer = null;
+    window.api.onDataChanged(() => {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(async () => {
+        data = await window.api.getData();
+        if (!dragging) { render(); sendInteractiveAreas(); }
+      }, 120);
+    });
+  }
+  setInterval(async () => { data = await window.api.getData(); render(); sendInteractiveAreas(); }, 10000);
   window.addEventListener('focus', async () => { data = await window.api.getData(); render(); });
 })();

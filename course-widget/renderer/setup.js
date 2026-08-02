@@ -98,7 +98,7 @@ function renderPeriods() {
   data.periods.sort((a, b) => a.index - b.index);
   data.periods.forEach((p) => {
     const row = document.createElement('div'); row.className = 'period-row';
-    row.innerHTML = `<span class="idx">第${p.index}节</span>
+    row.innerHTML = `<span class="idx">${esc(p.label || ('第' + p.index + '节'))}</span>
       <input type="time" value="${p.start}" class="p-start"><span>~</span>
       <input type="time" value="${p.end}" class="p-end">
       <button class="ghost small p-del">删除</button>`;
@@ -114,7 +114,7 @@ function renderPeriods() {
 }
 $('btnAddPeriod').addEventListener('click', () => {
   const next = data.periods.length ? Math.max(...data.periods.map(p => p.index)) + 1 : 1;
-  data.periods.push({ index: next, start: '08:00', end: '08:45' });
+  data.periods.push({ index: next, label: '第' + next + '节', start: '08:00', end: '08:45' });
   renderPeriods(); renderGrid();
 });
 
@@ -124,7 +124,7 @@ function renderGrid() {
   let html = '<tr><th style="width:52px">节次</th>' + WEEKDAYS.map(d => `<th>${d}</th>`).join('') + '</tr>';
   data.periods.sort((a, b) => a.index - b.index);
   for (const p of data.periods) {
-    html += `<tr><td class="idx" style="font-size:11px;color:#6b7280">${p.start}<br>~${p.end}</td>`;
+    html += `<tr><td class="idx" style="font-size:11px;color:#6b7280">${esc(p.label || ('第' + p.index + '节'))}<br>${p.start}~${p.end}</td>`;
     for (let day = 1; day <= 7; day++) {
       const c = data.courses.find(x => x.day === day && x.period === p.index);
       html += `<td class="cell" data-day="${day}" data-period="${p.index}">
@@ -140,7 +140,8 @@ function renderGrid() {
 function openEditor(day, period) {
   const c = data.courses.find(x => x.day === day && x.period === period);
   editing = { day, period, course: c || null };
-  $('modalTitle').textContent = `${WEEKDAYS[day - 1]} 第${period}节`;
+    const p0 = data.periods.find(x => x.index === period);
+  $('modalTitle').textContent = `${WEEKDAYS[day - 1]} ${p0 ? (p0.label || ('第' + period + '节')) : ('第' + period + '节')}`;
   $('mName').value = c ? c.name : '';
   $('mTeacher').value = c ? (c.teacher || '') : '';
   $('mLocation').value = c ? (c.location || '') : '';
@@ -255,7 +256,8 @@ function renderCountdowns() {
   if (!items.length) { list.innerHTML = '<li class="txt" style="color:#9aa1b2">暂无倒数日</li>'; return; }
   for (const cd of items) {
     const li = document.createElement('li');
-    li.innerHTML = `<span class="txt">🎯 <b>${esc(cd.title)}</b> · ${cd.date}${cd.color ? ` <span style="display:inline-block;width:10px;height:10px;background:${esc(cd.color)};border-radius:50%;vertical-align:middle"></span>` : ''}</span>
+    const meta = [cd.time ? '🕒 ' + cd.time : '', cd.location ? '📍 ' + cd.location : ''].filter(Boolean).join(' · ');
+    li.innerHTML = `<span class="txt">🎯 <b>${esc(cd.title)}</b> · ${cd.date}${meta ? ' · ' + esc(meta) : ''}${cd.color ? ` <span style="display:inline-block;width:10px;height:10px;background:${esc(cd.color)};border-radius:50%;vertical-align:middle"></span>` : ''}</span>
       <button class="ghost small cd-del">删除</button>`;
     li.querySelector('.cd-del').addEventListener('click', () => {
       data.countdowns = data.countdowns.filter(x => x.id !== cd.id);
@@ -269,8 +271,8 @@ $('btnAddCountdown').addEventListener('click', () => {
   const date = $('cdDate').value;
   if (!title || !date) { toast('⚠ 请填写名称和日期'); return; }
   if (!data.countdowns) data.countdowns = [];
-  data.countdowns.push({ id: uid(), title, date, color: $('cdColor').value || null });
-  $('cdTitle').value = ''; $('cdDate').value = ''; $('cdColor').value = '';
+  data.countdowns.push({ id: uid(), title, date, time: $('cdTime').value || null, location: $('cdLoc').value.trim() || null, color: $('cdColor').value || null });
+  $('cdTitle').value = ''; $('cdDate').value = ''; $('cdTime').value = ''; $('cdLoc').value = ''; $('cdColor').value = '';
   renderCountdowns();
   toast('✅ 已添加倒数日');
 });
@@ -280,6 +282,9 @@ function renderSettings() {
   $('setRemind').value = data.settings.remindMinutes;
   $('setSemester').value = data.settings.semesterStart || '';
   $('setWidth').value = data.settings.widgetWidth || 900;
+  const opPct = Math.round(((data.settings.widgetOpacity != null ? data.settings.widgetOpacity : 0.66) || 0.66) * 100);
+  $('setOpacity').value = opPct;
+  $('opacityLabel').textContent = opPct + '%';
   $('setCompact').checked = !!data.settings.widgetCompact;
   $('setWeekStrip').checked = !!data.settings.showWeekStrip;
   $('setAutostart').checked = !!data.settings.autostart;
@@ -302,6 +307,12 @@ $('setSemester').addEventListener('change', (e) => { data.settings.semesterStart
 $('setWidth').addEventListener('change', async (e) => {
   data.settings.widgetWidth = Math.min(1600, Math.max(560, parseInt(e.target.value, 10) || 900));
   if (window.api.setWidgetBounds) await window.api.setWidgetBounds({ width: data.settings.widgetWidth, correct: true });
+});
+$('setOpacity').addEventListener('input', (e) => {
+  const v = parseInt(e.target.value, 10) || 66;
+  data.settings.widgetOpacity = Math.max(20, Math.min(100, v)) / 100;
+  $('opacityLabel').textContent = Math.round(data.settings.widgetOpacity * 100) + '%';
+  if (window.api.setOpacity) window.api.setOpacity(data.settings.widgetOpacity);
 });
 if ($('btnSnapBR')) $('btnSnapBR').addEventListener('click', async () => { if (window.api.snapCorner) await window.api.snapCorner('bottomRight'); });
 if ($('btnSnapTR')) $('btnSnapTR').addEventListener('click', async () => { if (window.api.snapCorner) await window.api.snapCorner('topRight'); });
