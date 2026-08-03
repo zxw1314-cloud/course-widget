@@ -1,254 +1,243 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<title>桌面课表备忘录 - 设置</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: "Microsoft YaHei", system-ui, sans-serif; background: #f5f6fa; color: #2b2f38; font-size: 14px; }
-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; background: #fff; border-bottom: 1px solid #e6e8ef; }
-header h1 { font-size: 18px; }
-.actions button { margin-left: 8px; }
-button { cursor: pointer; border: none; border-radius: 6px; padding: 7px 14px; background: #4080ff; color: #fff; font-size: 13px; }
-button:hover { opacity: .9; }
-button.ghost { background: #eef1f7; color: #2b2f38; }
-button.danger { background: #ff5a5a; }
-button.small { padding: 3px 8px; font-size: 12px; }
-.tabs { display: flex; gap: 4px; padding: 10px 20px 0; background: #fff; border-bottom: 1px solid #e6e8ef; }
-.tabs button { background: none; color: #6b7280; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 14px; }
-.tabs button.active { color: #4080ff; border-bottom-color: #4080ff; font-weight: 600; }
-main { padding: 16px 20px; overflow: auto; height: calc(100vh - 120px); }
-.card { background: #fff; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
-.card h3 { font-size: 14px; margin-bottom: 10px; color: #3a4150; }
-.hidden { display: none; }
-label { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
-input, select { border: 1px solid #d7dbe6; border-radius: 6px; padding: 6px 8px; font-size: 13px; }
-.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
-table.grid th, table.grid td { border: 1px solid #e3e6ef; padding: 6px; text-align: center; font-size: 12px; vertical-align: top; }
-table.grid th { background: #f0f3fa; }
-td.cell { cursor: pointer; min-height: 42px; }
-.dirty { color: #e8590c; font-size: 12px; font-weight: 600; margin-right: 10px; }
-.abbr-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
-.abbr-row .abbr-name { width: 220px; flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #3a4150; }
-.abbr-row input { flex: 1; }
-.json-text { width: 100%; height: 240px; font-family: Consolas, monospace; font-size: 12px; box-sizing: border-box; }
-.modal-box.wide { width: 640px; max-width: 92vw; }
-td.cell:hover { background: #f0f5ff; }
-td.cell .cname { color: #4080ff; font-weight: 600; display: block; }
-td.cell .cmeta { color: #9aa1b2; font-size: 11px; }
-.period-row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
-.period-row input[type=time] { width: 96px; }
-.period-row .idx { width: 40px; color: #6b7280; }
-ul.list { list-style: none; }
-ul.list li { display: flex; align-items: center; gap: 8px; padding: 7px 4px; border-bottom: 1px dashed #eef0f6; }
-ul.list li .txt { flex: 1; }
-.toast { margin-top: 10px; color: #4080ff; min-height: 18px; }
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 99; }
-.modal.hidden { display: none; }
-.modal-box { background: #fff; border-radius: 12px; padding: 18px 20px; width: 340px; }
-.modal-box h3 { margin-bottom: 12px; }
-.modal-box label { display: block; margin: 10px 0; }
-.modal-box label input { width: 100%; margin-top: 4px; }
-.modal-box .row { margin-top: 14px; justify-content: flex-end; }
-.todo-item .done { text-decoration: line-through; color: #9aa1b2; }
-.colors { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; align-items: center; }
-.cdot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #d7dbe6; cursor: pointer; padding: 0; background: #fff; }
-.cdot.on { border-color: #4080ff; box-shadow: 0 0 0 2px rgba(64,128,255,.25); }
-.cdot.none { color: #9aa1b2; font-size: 12px; line-height: 20px; }
-.cchip { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
-hr { border: none; border-top: 1px dashed #e3e6ef; margin: 10px 0; }
-</style>
-</head>
-<body>
-<header>
-  <h1>📚 桌面课表备忘录</h1>
-  <div class="actions">
-    <span id="dirtyBadge" class="dirty hidden">● 未保存</span>
-    <button id="btnSave">💾 保存</button>
-    <button id="btnApplyWidget">🖼 保存并应用到桌面</button>
-  </div>
-</header>
-<nav class="tabs">
-  <button data-tab="timetable" class="active">课表</button>
-  <button data-tab="events">临时活动</button>
-  <button data-tab="todos">待办</button>
-  <button data-tab="countdown">倒数日</button>
-  <button data-tab="settings">设置</button>
-</nav>
-<main>
-  <section id="tab-timetable">
-    <div class="card">
-      <h3>节次时间（每天第 1~N 节课的起止时间）</h3>
-      <div id="periods"></div>
-      <button class="ghost small" id="btnAddPeriod">+ 添加节次</button>
-    </div>
-    <div class="card">
-      <h3>每周课表（点击格子添加/编辑课程；再点"删除"清空）</h3>
-      <table class="grid" id="courseGrid"></table>
-    </div>
-    <div class="card">
-      <h3>课程简写（挂件显示用；AI 提取的是全称，这里配好简写后挂件只显示简写，留空=显示全称）</h3>
-      <div id="abbrList"></div>
-    </div>
-    <div class="card">
-      <h3>从 JSON 导入课表（多模态 AI 提取）</h3>
-      <div class="row">
-        <button class="ghost" id="btnJsonImport">打开导入面板</button>
-        <button class="ghost" id="btnJsonExport">导出当前课表 JSON</button>
-        <button class="ghost" id="btnJsonPrompt">复制 AI 提取提示词</button>
-      </div>
-      <p style="color:#9aa1b2;font-size:12px;margin-top:8px">把课表截图交给 AI（用右侧提示词），得到 JSON 后粘贴进导入面板即可生成课表；也支持"导出当前课表 JSON"后让 AI 修改再导回。</p>
-    </div>
-  </section>
-  <section id="tab-events" class="hidden">
-    <div class="card">
-      <h3>添加临时活动（一次性日程，到点会提醒；过期活动会标红，可一键清除）</h3>
-      <div class="row">
-        <input id="evTitle" placeholder="活动名称" style="flex:1;min-width:160px">
-        <input id="evDate" type="date">
-        <input id="evTime" type="time" title="时间（可选）">
-        <input id="evLocation" placeholder="地点（可选）" style="flex:1;min-width:120px">
-        <input id="evPoints" placeholder="提前分钟,逗号分隔" style="width:120px">
-        <input id="evRepStart" type="number" min="0" placeholder="重复开始前" style="width:100px">
-        <input id="evRepEvery" type="number" min="1" placeholder="每N分钟" style="width:90px">
-        <button id="btnAddEvent">添加</button>
-      </div>
-    </div>
-    <div class="card"><h3>活动列表（过期的会标红提示）</h3><div class="row" style="margin-bottom:6px"><button class="ghost small" id="btnClearOverdueEvents">🗑 一键清除过期活动</button></div><ul class="list" id="eventList"></ul></div>
-  </section>
-  <section id="tab-todos" class="hidden">
-    <div class="card">
-      <h3>添加待办（列表显示全部待办，过期的会标红提示；也可在桌面挂件点日期添加）</h3>
-      <div class="row">
-        添加到日期 <input id="todoDate" type="date">
-        <button class="ghost small" id="btnClearOverdueTodos">🗑 一键清除过期待办</button>
-      </div>
-      <ul class="list" id="todoList"></ul>
-      <div class="row" style="margin-top:10px">
-        <input id="todoText" placeholder="添加待办" style="flex:1;min-width:160px">
-        <input id="tdTime" type="time" title="截止时间">
-        <button id="btnAddTodo">添加</button>
-      </div>
-      <div class="row" style="margin-top:6px;font-size:12px;color:#6b7280">
-        <span>提醒(提前分钟,逗号分隔)</span><input id="tdPoints" style="width:110px" placeholder="10,60">
-        <span>重复:开始前</span><input id="tdRepStart" type="number" min="0" style="width:60px">分/每<input id="tdRepEvery" type="number" min="1" style="width:60px">分
-      </div>
-    </div>
-  </section>
-  <section id="tab-countdown" class="hidden">
-    <div class="card">
-      <h3>添加倒数日（考试、假期等，会显示在桌面挂件上；考试可填时间与地点，到点提醒）</h3>
-      <div class="row">
-        <input id="cdTitle" placeholder="名称，如：期末高数" style="flex:1;min-width:140px">
-        <input id="cdDate" type="date">
-        <input id="cdTime" type="time" title="开始时间（考试等，可留空）">
-        <input id="cdLoc" placeholder="地点（可留空）" style="flex:1;min-width:120px">
-        <select id="cdColor">
-          <option value="">默认</option>
-          <option value="#77b5e8">蓝</option>
-          <option value="#67bfa4">绿</option>
-          <option value="#f6c85f">黄</option>
-          <option value="#f28b82">红</option>
-          <option value="#a88ad8">紫</option>
-        </select>
-        <button id="btnAddCountdown">添加</button>
-      </div>
-    </div>
-    <div class="card"><h3>倒数日列表</h3><ul class="list" id="countdownList"></ul></div>
-  </section>
-  <section id="tab-settings" class="hidden">
-    <div class="card">
-      <h3>设置</h3>
-      <label>默认提前提醒（分钟）<input id="setRemind" type="number" min="0" style="width:100px"></label>
-      <label>开学日期（第1周周一，用于"周次"过滤）<input id="setSemester" type="date"></label>
-      <label>挂件宽度（像素，560~1600）<input id="setWidth" type="number" min="560" max="1600" style="width:110px"></label>
-      <label>挂件不透明度 <input id="setOpacity" type="range" min="20" max="100" value="66" style="width:160px;vertical-align:middle"> <span id="opacityLabel">66%</span>（20%~100%，即时生效）</label>
-      <label>挂件归位
-        <button id="btnSnapBR" type="button">贴到右下角</button>
-        <button id="btnSnapTR" type="button">贴到右上角</button>
-      </label>
-      <label><input id="setCompact" type="checkbox"> 挂件紧凑模式（历史保留项，当前版本不生效）</label>
-      <label><input id="setMerge" type="checkbox"> 合并连堂课程（挂件把连续的同名课合成一个大框，显示起止时间）</label>
-      <label><input id="setWeekStrip" type="checkbox"> 挂件显示本周日期条（历史保留项，当前版本不生效）</label>
-      <p style="color:#9aa1b2;font-size:12px;margin:0">以上两个勾选为旧版遗留选项，勾不勾都不影响显示；保留是为了避免你以为功能丢了（能跑就不修了）。</p>
-      <label><input id="setAutostart" type="checkbox"> 开机自启</label>
-      <label><input id="setShowCountdown" type="checkbox"> 挂件显示倒数日</label>
-      <hr>
-      <h3>📱 手机连接（局域网 / 樱花frp，保存后生效）</h3>
-      <label><input id="setMobileBridge" type="checkbox"> 允许手机/远程连接（电脑开一个 HTTP 端口：App 可同步课表、上传待办/临时活动，网页可查看今日/添加待办）</label>
-      <label>开放模式 <select id="setMobileMode" style="width:200px">
-        <option value="both">网页 + App（都开）</option>
-        <option value="web">仅网页</option>
-        <option value="app">仅 App</option>
-      </select></label>
-      <div id="mobileInfoBox" style="display:none;font-size:12px;color:#6b7280;line-height:1.7">
-        <div>本地地址：<code id="miLocalUrl"></code></div>
-        <div>访问令牌：<code id="miToken" style="word-break:break-all"></code>
-          <button class="ghost small" id="btnCopyToken" type="button">复制</button>
-          <button class="ghost small" id="btnRegenToken" type="button">重新生成</button>
-        </div>
-        <p style="margin-top:4px">手机连同一 Wi-Fi 直接访问本地地址；出门用樱花frp 把本机 <code>8723</code> 端口映射到公网（隧道需开"自动 HTTPS"，樱花frp 会帮你终止 TLS，本地服务不用改）。<b>新版 Android App</b> 为本地课表模式：在 App「设置」里填服务器地址（樱花隧道用 <code>https://</code>）+ 令牌，可手动「同步到手机 / 立即上传」，断网也能看本地课表；网页/PWA 版照旧在线查看+新增待办。改完记得点「保存」。</p>
-      </div>
-      <hr>
-      <h3>提醒声音（弹系统通知时同时播放提示音，防止错过）</h3>
-      <label><input id="setBell" type="checkbox"> 弹通知时播放提示音</label>
-      <label>提示音 <select id="setBellPreset" style="width:180px"></select>
-        <button class="ghost small" id="btnTestBell">试听</button>
-      </label>
-      <label>音量 <input id="setBellVolume" type="range" min="0" max="100" value="80" style="width:160px;vertical-align:middle"> <span id="bellVolLabel">80%</span></label>
-      <p style="color:#9aa1b2;font-size:12px;margin:4px 0 0">课程/待办/活动/考试提醒弹系统通知时，同时播放所选提示音；关闭后只弹通知、不响铃。</p>
-      <div class="row">
-        <button class="ghost" id="btnTestNotify">测试提醒</button>
-        <button class="ghost" id="btnExport">导出备份</button>
-        <button class="ghost" id="btnImport">导入备份</button>
-      </div>
-      <p class="toast" id="toast"></p>
-    </div>
-  </section>
-</main>
-<div id="modal" class="modal hidden">
-  <div class="modal-box">
-    <h3 id="modalTitle">编辑课程</h3>
-    <label>课程名 <input id="mName" placeholder="如：高等数学"></label>
-    <label>教师 <input id="mTeacher" placeholder="如：张老师（可留空）"></label>
-    <label>地点 <input id="mLocation" placeholder="如：A101（可留空）"></label>
-    <label>颜色 <span id="mColors" class="colors"></span></label>
-    <label>周次 <input id="mWeeks" placeholder="留空=每周；如 1-16 或 1,3,5"></label>
-    <label>提醒(提前分钟,逗号分隔) <input id="mPoints" placeholder="如 10,60；留空=默认10"></label>
-    <label>重复提醒：开始前 <input id="mRepStart" type="number" min="0" style="width:70px"> 分钟起，每 <input id="mRepEvery" type="number" min="1" style="width:60px"> 分钟提醒一次（留空=不重复）</label>
-    <div class="row">
-      <button class="danger hidden" id="mDelete">删除该课程</button>
-      <button id="mSave">保存</button>
-      <button class="ghost" id="mCancel">取消</button>
-    </div>
-  </div>
-</div>
-<div id="closeModal" class="modal hidden">
-  <div class="modal-box">
-    <h3>有未保存的修改</h3>
-    <p style="font-size:13px;color:#6b7280;margin:4px 0 14px">课表/设置还没保存到数据文件，关闭会丢失修改。</p>
-    <div class="row" style="justify-content:flex-end">
-      <button class="ghost" id="btnCloseCancel">继续编辑</button>
-      <button class="ghost" id="btnCloseDiscard">不保存</button>
-      <button class="ghost" id="btnCloseSave">仅保存</button>
-      <button id="btnCloseSaveApply">保存并应用到桌面</button>
-    </div>
-  </div>
-</div>
-<div id="jsonModal" class="modal hidden">
-  <div class="modal-box wide">
-    <h3>导入课表 JSON</h3>
-    <textarea id="jsonText" class="json-text" placeholder='{"semesterStart":"2026-09-07","periods":[{"index":1,"label":"第1节","start":"08:00","end":"08:45"}],"courses":[{"name":"高等数学","abbr":"高数","day":1,"periods":[1,2],"location":"A101","weeks":null,"color":"#77b5e8"}],"abbr":{"高等数学":"高数"}}'></textarea>
-    <div id="jsonPreview" style="font-size:12px;color:#6b7280;margin:8px 0;max-height:130px;overflow:auto"></div>
-    <div class="row" style="justify-content:flex-end">
-      <button class="ghost" id="btnJsonCancel">取消</button>
-      <button class="ghost" id="btnJsonParse">解析预览</button>
-      <button id="btnJsonApply" class="hidden">确认导入</button>
-    </div>
-  </div>
-</div>
-<script src="chime.js"></script>
-<script src="setup.js"></script>
-</body>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>桌面课表备忘录 - 设置</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Microsoft YaHei", system-ui, sans-serif; background: #f5f6fa; color: #2b2f38; font-size: 14px; }
+header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; background: #fff; border-bottom: 1px solid #e6e8ef; }
+header h1 { font-size: 18px; }
+.actions button { margin-left: 8px; }
+button { cursor: pointer; border: none; border-radius: 6px; padding: 7px 14px; background: #4080ff; color: #fff; font-size: 13px; }
+button:hover { opacity: .9; }
+button.ghost { background: #eef1f7; color: #2b2f38; }
+button.danger { background: #ff5a5a; }
+button.small { padding: 3px 8px; font-size: 12px; }
+.tabs { display: flex; gap: 4px; padding: 10px 20px 0; background: #fff; border-bottom: 1px solid #e6e8ef; }
+.tabs button { background: none; color: #6b7280; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 14px; }
+.tabs button.active { color: #4080ff; border-bottom-color: #4080ff; font-weight: 600; }
+main { padding: 16px 20px; overflow: auto; height: calc(100vh - 120px); }
+.card { background: #fff; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+.card h3 { font-size: 14px; margin-bottom: 10px; color: #3a4150; }
+.hidden { display: none; }
+label { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+input, select { border: 1px solid #d7dbe6; border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table.grid th, table.grid td { border: 1px solid #e3e6ef; padding: 6px; text-align: center; font-size: 12px; vertical-align: top; }
+table.grid th { background: #f0f3fa; }
+td.cell { cursor: pointer; min-height: 42px; }
+.dirty { color: #e8590c; font-size: 12px; font-weight: 600; margin-right: 10px; }
+.abbr-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.abbr-row .abbr-name { width: 220px; flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #3a4150; }
+.abbr-row input { flex: 1; }
+.json-text { width: 100%; height: 240px; font-family: Consolas, monospace; font-size: 12px; box-sizing: border-box; }
+.modal-box.wide { width: 640px; max-width: 92vw; }
+td.cell:hover { background: #f0f5ff; }
+td.cell .cname { color: #4080ff; font-weight: 600; display: block; }
+td.cell .cmeta { color: #9aa1b2; font-size: 11px; }
+.period-row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.period-row input[type=time] { width: 96px; }
+.period-row .idx { width: 40px; color: #6b7280; }
+ul.list { list-style: none; }
+ul.list li { display: flex; align-items: center; gap: 8px; padding: 7px 4px; border-bottom: 1px dashed #eef0f6; }
+ul.list li .txt { flex: 1; }
+.toast { margin-top: 10px; color: #4080ff; min-height: 18px; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 99; }
+.modal.hidden { display: none; }
+.modal-box { background: #fff; border-radius: 12px; padding: 18px 20px; width: 340px; }
+.modal-box h3 { margin-bottom: 12px; }
+.modal-box label { display: block; margin: 10px 0; }
+.modal-box label input { width: 100%; margin-top: 4px; }
+.modal-box .row { margin-top: 14px; justify-content: flex-end; }
+.todo-item .done { text-decoration: line-through; color: #9aa1b2; }
+.colors { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; align-items: center; }
+.cdot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #d7dbe6; cursor: pointer; padding: 0; background: #fff; }
+.cdot.on { border-color: #4080ff; box-shadow: 0 0 0 2px rgba(64,128,255,.25); }
+.cdot.none { color: #9aa1b2; font-size: 12px; line-height: 20px; }
+.cchip { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+hr { border: none; border-top: 1px dashed #e3e6ef; margin: 10px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📚 桌面课表备忘录</h1>
+    <div class="actions">
+    <span class="dirty" style="color:#2b6e4f">改动即时保存生效</span>
+    <button id="btnApplyWidget" class="ghost">显示挂件</button>
+  </div>
+</header>
+<nav class="tabs">
+  <button data-tab="timetable" class="active">课表</button>
+  <button data-tab="events">临时活动</button>
+  <button data-tab="todos">待办</button>
+  <button data-tab="countdown">倒数日</button>
+  <button data-tab="settings">设置</button>
+</nav>
+<main>
+  <section id="tab-timetable">
+    <div class="card">
+      <h3>节次时间（每天第 1~N 节课的起止时间）</h3>
+      <div id="periods"></div>
+      <button class="ghost small" id="btnAddPeriod">+ 添加节次</button>
+    </div>
+    <div class="card">
+      <h3>每周课表（点击格子添加/编辑课程；再点"删除"清空）</h3>
+      <table class="grid" id="courseGrid"></table>
+    </div>
+    <div class="card">
+      <h3>课程简写（挂件显示用；AI 提取的是全称，这里配好简写后挂件只显示简写，留空=显示全称）</h3>
+      <div id="abbrList"></div>
+    </div>
+    <div class="card">
+      <h3>从 JSON 导入课表（多模态 AI 提取）</h3>
+      <div class="row">
+        <button class="ghost" id="btnJsonImport">打开导入面板</button>
+        <button class="ghost" id="btnJsonExport">导出当前课表 JSON</button>
+        <button class="ghost" id="btnJsonPrompt">复制 AI 提取提示词</button>
+      </div>
+      <p style="color:#9aa1b2;font-size:12px;margin-top:8px">把课表截图交给 AI（用右侧提示词），得到 JSON 后粘贴进导入面板即可生成课表；也支持"导出当前课表 JSON"后让 AI 修改再导回。</p>
+    </div>
+  </section>
+  <section id="tab-events" class="hidden">
+    <div class="card">
+      <h3>添加临时活动（一次性日程，到点会提醒；过期活动会标红，可一键清除）</h3>
+      <div class="row">
+        <input id="evTitle" placeholder="活动名称" style="flex:1;min-width:160px">
+        <input id="evDate" type="date">
+        <input id="evTime" type="time" title="时间（可选）">
+        <input id="evLocation" placeholder="地点（可选）" style="flex:1;min-width:120px">
+        <input id="evPoints" placeholder="提前分钟,逗号分隔" style="width:120px">
+        <input id="evRepStart" type="number" min="0" placeholder="重复开始前" style="width:100px">
+        <input id="evRepEvery" type="number" min="1" placeholder="每N分钟" style="width:90px">
+        <button id="btnAddEvent">添加</button>
+      </div>
+    </div>
+    <div class="card"><h3>活动列表（过期的会标红提示）</h3><div class="row" style="margin-bottom:6px"><button class="ghost small" id="btnClearOverdueEvents">🗑 一键清除过期活动</button></div><ul class="list" id="eventList"></ul></div>
+  </section>
+  <section id="tab-todos" class="hidden">
+    <div class="card">
+      <h3>添加待办（列表显示全部待办，过期的会标红提示；也可在桌面挂件点日期添加）</h3>
+      <div class="row">
+        添加到日期 <input id="todoDate" type="date">
+        <button class="ghost small" id="btnClearOverdueTodos">🗑 一键清除过期待办</button>
+      </div>
+      <ul class="list" id="todoList"></ul>
+      <div class="row" style="margin-top:10px">
+        <input id="todoText" placeholder="添加待办" style="flex:1;min-width:160px">
+        <input id="tdTime" type="time" title="截止时间">
+        <button id="btnAddTodo">添加</button>
+      </div>
+      <div class="row" style="margin-top:6px;font-size:12px;color:#6b7280">
+        <span>提醒(提前分钟,逗号分隔)</span><input id="tdPoints" style="width:110px" placeholder="10,60">
+        <span>重复:开始前</span><input id="tdRepStart" type="number" min="0" style="width:60px">分/每<input id="tdRepEvery" type="number" min="1" style="width:60px">分
+      </div>
+    </div>
+  </section>
+  <section id="tab-countdown" class="hidden">
+    <div class="card">
+      <h3>添加倒数日（考试、假期等，会显示在桌面挂件上；考试可填时间与地点，到点提醒）</h3>
+      <div class="row">
+        <input id="cdTitle" placeholder="名称，如：期末高数" style="flex:1;min-width:140px">
+        <input id="cdDate" type="date">
+        <input id="cdTime" type="time" title="开始时间（考试等，可留空）">
+        <input id="cdLoc" placeholder="地点（可留空）" style="flex:1;min-width:120px">
+        <select id="cdColor">
+          <option value="">默认</option>
+          <option value="#77b5e8">蓝</option>
+          <option value="#67bfa4">绿</option>
+          <option value="#f6c85f">黄</option>
+          <option value="#f28b82">红</option>
+          <option value="#a88ad8">紫</option>
+        </select>
+        <button id="btnAddCountdown">添加</button>
+      </div>
+    </div>
+    <div class="card"><h3>倒数日列表</h3><ul class="list" id="countdownList"></ul></div>
+  </section>
+  <section id="tab-settings" class="hidden">
+    <div class="card">
+      <h3>设置</h3>
+      <label>默认提前提醒（分钟）<input id="setRemind" type="number" min="0" style="width:100px"></label>
+      <label>开学日期（第1周周一，用于"周次"过滤）<input id="setSemester" type="date"></label>
+      <label>挂件宽度（像素，560~1600）<input id="setWidth" type="number" min="560" max="1600" style="width:110px"></label>
+      <label>挂件不透明度 <input id="setOpacity" type="range" min="20" max="100" value="66" style="width:160px;vertical-align:middle"> <span id="opacityLabel">66%</span>（20%~100%，即时生效）</label>
+      <label>挂件归位
+        <button id="btnSnapBR" type="button">贴到右下角</button>
+        <button id="btnSnapTR" type="button">贴到右上角</button>
+      </label>
+      <label><input id="setCompact" type="checkbox"> 挂件紧凑模式（历史保留项，当前版本不生效）</label>
+      <label><input id="setMerge" type="checkbox"> 合并连堂课程（挂件把连续的同名课合成一个大框，显示起止时间）</label>
+      <label><input id="setWeekStrip" type="checkbox"> 挂件显示本周日期条（历史保留项，当前版本不生效）</label>
+      <p style="color:#9aa1b2;font-size:12px;margin:0">以上两个勾选为旧版遗留选项，勾不勾都不影响显示；保留是为了避免你以为功能丢了（能跑就不修了）。</p>
+      <label><input id="setAutostart" type="checkbox"> 开机自启</label>
+      <label><input id="setShowCountdown" type="checkbox"> 挂件显示倒数日</label>
+      <hr>
+      <h3>📱 手机连接（局域网 / 樱花frp，保存后生效）</h3>
+      <label><input id="setMobileBridge" type="checkbox"> 允许手机/远程连接（电脑开一个 HTTP 端口：App 可同步课表、上传待办/临时活动/倒数日，网页可查看今日/添加待办）</label>
+      <label>开放模式 <select id="setMobileMode" style="width:200px">
+        <option value="both">网页 + App（都开）</option>
+        <option value="web">仅网页</option>
+        <option value="app">仅 App</option>
+      </select></label>
+      <div id="mobileInfoBox" style="display:none;font-size:12px;color:#6b7280;line-height:1.7">
+        <div>本地地址：<code id="miLocalUrl"></code></div>
+        <div>访问令牌：<code id="miToken" style="word-break:break-all"></code>
+          <button class="ghost small" id="btnCopyToken" type="button">复制</button>
+          <button class="ghost small" id="btnRegenToken" type="button">重新生成</button>
+        </div>
+        <p style="margin-top:4px">手机连同一 Wi-Fi 直接访问本地地址；出门用樱花frp 把本机 <code>8723</code> 端口映射到公网（隧道需开"自动 HTTPS"，樱花frp 会帮你终止 TLS，本地服务不用改）。<b>新版 Android App</b> 为本地课表模式：在 App「设置」里填服务器地址（樱花隧道用 <code>https://</code>）+ 令牌，可手动「同步到手机 / 立即上传」，断网也能看本地课表；网页/PWA 版照旧在线查看+新增待办。改完记得点「保存」。</p>
+      </div>
+      <hr>
+      <h3>提醒声音（弹系统通知时同时播放提示音，防止错过）</h3>
+      <label><input id="setBell" type="checkbox"> 弹通知时播放提示音</label>
+      <label>提示音 <select id="setBellPreset" style="width:180px"></select>
+        <button class="ghost small" id="btnTestBell">试听</button>
+      </label>
+      <label>音量 <input id="setBellVolume" type="range" min="0" max="100" value="80" style="width:160px;vertical-align:middle"> <span id="bellVolLabel">80%</span></label>
+      <p style="color:#9aa1b2;font-size:12px;margin:4px 0 0">课程/待办/活动/考试提醒弹系统通知时，同时播放所选提示音；关闭后只弹通知、不响铃。</p>
+      <div class="row">
+        <button class="ghost" id="btnTestNotify">测试提醒</button>
+        <button class="ghost" id="btnExport">导出备份</button>
+        <button class="ghost" id="btnImport">导入备份</button>
+      </div>
+      <p class="toast" id="toast"></p>
+    </div>
+  </section>
+</main>
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <h3 id="modalTitle">编辑课程</h3>
+    <label>课程名 <input id="mName" placeholder="如：高等数学"></label>
+    <label>教师 <input id="mTeacher" placeholder="如：张老师（可留空）"></label>
+    <label>地点 <input id="mLocation" placeholder="如：A101（可留空）"></label>
+    <label>颜色 <span id="mColors" class="colors"></span></label>
+    <label>周次 <input id="mWeeks" placeholder="留空=每周；如 1-16 或 1,3,5"></label>
+    <label>提醒(提前分钟,逗号分隔) <input id="mPoints" placeholder="如 10,60；留空=默认10"></label>
+    <label>重复提醒：开始前 <input id="mRepStart" type="number" min="0" style="width:70px"> 分钟起，每 <input id="mRepEvery" type="number" min="1" style="width:60px"> 分钟提醒一次（留空=不重复）</label>
+    <div class="row">
+      <button class="danger hidden" id="mDelete">删除该课程</button>
+      <button id="mSave">保存</button>
+      <button class="ghost" id="mCancel">取消</button>
+    </div>
+  </div>
+</div>
+
+</div>
+<div id="jsonModal" class="modal hidden">
+  <div class="modal-box wide">
+    <h3>导入课表 JSON</h3>
+    <textarea id="jsonText" class="json-text" placeholder='{"semesterStart":"2026-09-07","periods":[{"index":1,"label":"第1节","start":"08:00","end":"08:45"}],"courses":[{"name":"高等数学","abbr":"高数","day":1,"periods":[1,2],"location":"A101","weeks":null,"color":"#77b5e8"}],"abbr":{"高等数学":"高数"}}'></textarea>
+    <div id="jsonPreview" style="font-size:12px;color:#6b7280;margin:8px 0;max-height:130px;overflow:auto"></div>
+    <div class="row" style="justify-content:flex-end">
+      <button class="ghost" id="btnJsonCancel">取消</button>
+      <button class="ghost" id="btnJsonParse">解析预览</button>
+      <button id="btnJsonApply" class="hidden">确认导入</button>
+    </div>
+  </div>
+</div>
+<script src="chime.js"></script>
+<script src="setup.js"></script>
+</body>
 </html>

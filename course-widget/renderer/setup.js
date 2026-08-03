@@ -5,6 +5,14 @@ const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '�
 function pad(n) { return String(n).padStart(2, '0'); }
 function dateKey(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 function todayKey() { return dateKey(new Date()); }
+function toMinutes(t) {
+  if (!t || typeof t !== 'string') return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t.trim());
+  if (!m) return null;
+  const h = parseInt(m[1], 10), mm = parseInt(m[2], 10);
+  if (h > 23 || mm > 59) return null;
+  return h * 60 + mm;
+}
 function weekdayCN(key) { const d = new Date(key + 'T00:00:00'); return ['日','一','二','三','四','五','六'][d.getDay()]; }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -69,22 +77,43 @@ function fmtRepeat(r) { return (r && r.repeat) ? `重复:前${r.repeat.start}分
 
 async function init() {
   data = await window.api.getData();
-  bindTabs(); bindHeader(); bindCloseConfirm(); renderPeriods(); renderGrid(); renderEvents(); renderSettings(); bindTodoTab(); refreshTodoList(); renderCountdowns(); renderAbbrs();
+  bindTabs(); bindHeader(); renderPeriods(); renderGrid(); renderEvents(); renderSettings(); bindTodoTab(); refreshTodoList(); renderCountdowns(); renderAbbrs();
 }
 function toast(msg) { $('toast').textContent = msg; setTimeout(() => { if ($('toast').textContent === msg) $('toast').textContent = ''; }, 3000); }
 
-// ---- 未保存修改提醒 ----
-let dirty = false;
-function markDirty() {
-  if (dirty) return;
-  dirty = true;
-  const b = $('dirtyBadge'); if (b) b.classList.remove('hidden');
-  if (window.api.setSetupDirty) window.api.setSetupDirty(true);
+// ---- 即时生效：所有改动直接写入共享配置 data.json（不再有保存按钮） ----
+let pendingApply = false;
+let applyTimer = null;
+let applyQueued = false;
+let reloadAfterApply = false;
+function doApply() {
+  if (pendingApply) { applyQueued = true; return Promise.resolve(); }
+  pendingApply = true;
+  const snap = JSON.parse(JSON.stringify(data));
+  return window.api.setData(snap).catch(() => {}).finally(() => {
+    pendingApply = false;
+    if (applyQueued) { applyQueued = false; applySettings(true); return; }
+    if (reloadAfterApply) { reloadAfterApply = false; reloadFromMain(); }
+  });
 }
-function clearDirty() {
-  dirty = false;
-  const b = $('dirtyBadge'); if (b) b.classList.add('hidden');
-  if (window.api.setSetupDirty) window.api.setSetupDirty(false);
+function applySettings(immediate) {
+  if (applyTimer) { clearTimeout(applyTimer); applyTimer = null; }
+  if (immediate) return doApply();
+  applyTimer = setTimeout(() => { applyTimer = null; doApply(); }, 150);
+  return Promise.resolve();
+}
+function markDirty() { applySettings(false); }
+async function reloadFromMain() {
+  try {
+    data = await window.api.getData();
+    renderPeriods(); renderGrid(); renderEvents(); renderSettings(); refreshTodoList(); renderCountdowns(); renderAbbrs();
+  } catch (e) {}
+}
+if (window.api.onDataChanged) {
+  window.api.onDataChanged(() => {
+    if (pendingApply || applyTimer) { reloadAfterApply = true; return; }
+    reloadFromMain();
+  });
 }
 function copyText(t) {
   try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(() => {}, () => {}); return true; } } catch (e) {}
@@ -107,26 +136,19 @@ function bindTabs() {
   });
 }
 function bindHeader() {
-  $('btnSave').addEventListener('click', async () => { await window.api.setData(data); clearDirty(); toast('✅ 已保存（别忘了应用到桌面挂件）'); });
-  $('btnApplyWidget').addEventListener('click', async () => {
+  // 已改为即时生效：无保存按钮，所有改动自动写入 data.json
+  const b = $('btnApplyWidget');
+  if (b) b.addEventListener('click', async () => {
     data.settings.widgetApplied = true; data.settings.firstRun = false;
-    await window.api.setData(data); await window.api.showWidget(); clearDirty();
-    toast('✅ 已保存，挂件已应用到桌面（软件在托盘）');
+    await applySettings(true); await window.api.showWidget();
+    toast('挂件已显示在桌面');
   });
 }
+
 function bindCloseConfirm() {
-  if (!window.api.onAskClose) return;
-  window.api.onAskClose(() => { $('closeModal').classList.remove('hidden'); });
-  $('btnCloseCancel').addEventListener('click', () => $('closeModal').classList.add('hidden'));
-  $('btnCloseDiscard').addEventListener('click', () => { clearDirty(); window.api.forceCloseSetup(); });
-  $('btnCloseSave').addEventListener('click', async () => {
-    await window.api.setData(data); clearDirty(); window.api.forceCloseSetup();
-  });
-  $('btnCloseSaveApply').addEventListener('click', async () => {
-    data.settings.widgetApplied = true; data.settings.firstRun = false;
-    await window.api.setData(data); await window.api.showWidget(); clearDirty(); window.api.forceCloseSetup();
-  });
+  // 已无未保存概念：所有改动即时写入 data.json，关闭窗口即关闭
 }
+
 
 // ---- 节次 ----
 function renderPeriods() {
@@ -415,6 +437,7 @@ $('setSemester').addEventListener('change', (e) => { data.settings.semesterStart
 $('setWidth').addEventListener('change', async (e) => {
   data.settings.widgetWidth = Math.min(1600, Math.max(560, parseInt(e.target.value, 10) || 900));
   if (window.api.setWidgetBounds) await window.api.setWidgetBounds({ width: data.settings.widgetWidth, correct: true });
+  markDirty();
 });
 $('setOpacity').addEventListener('input', (e) => {
   const v = parseInt(e.target.value, 10) || 66;

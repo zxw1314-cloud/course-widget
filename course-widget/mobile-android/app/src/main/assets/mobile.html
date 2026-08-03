@@ -48,6 +48,7 @@ button.mini.danger { background: rgba(242,139,130,.2); color: #f28b82; }
 .qtag { flex: 0 0 auto; font-size: 11px; color: #cfe0ff; background: rgba(64,128,255,.2); border-radius: 6px; padding: 1px 6px; }
 .qmain { flex: 1; min-width: 0; font-size: 13px; }
 .qsub { display: block; color: #7d86a3; font-size: 11px; }
+textarea { width: 100%; min-height: 110px; padding: 9px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #eef1f8; font-size: 13px; font-family: Consolas, monospace; margin: 4px 0 8px; }
 #flash { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); background: rgba(64,128,255,.92); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 9; white-space: nowrap; }
 #flash.show { opacity: 1; }
 </style>
@@ -102,6 +103,24 @@ button.mini.danger { background: rgba(242,139,130,.2); color: #f28b82; }
     <button class="act" id="btnAddEvent" onclick="addEvent()">加入活动</button>
   </div>
   <div class="card">
+    <h2>新增倒数日（先存手机，连上后自动上传）</h2>
+    <div class="fld">倒数日内容</div>
+    <input id="cdTitle" placeholder="如：英语四级考试" autocomplete="off">
+    <div class="row">
+      <div><div class="fld">日期</div><input id="cdDate" type="date"></div>
+      <div><div class="fld">时间（可留空）</div><input id="cdTime" type="time"></div>
+    </div>
+    <button class="act" id="btnAddCountdown" onclick="addCountdown()">加入倒数日</button>
+  </div>
+  <div class="card">
+    <h2>AI 提取 JSON 一键加入（待办 / 活动 / 倒数日）</h2>
+    <div class="hint" style="margin-bottom:6px">把聊天记录/通知截图丢给多模态 AI，先用下面的提示词让它输出 JSON，再把 JSON 粘贴到这里一键加入。</div>
+    <button class="act ghost" onclick="copyPrompt()">复制 AI 提取提示词</button>
+    <textarea id="jsonInput" placeholder='粘贴 AI 输出的 JSON，如 {"todos":[...],"events":[...],"countdowns":[...]}'></textarea>
+    <button class="act" onclick="importJson()">解析并一键加入</button>
+    <div id="jsonResult" style="font-size:12px;color:#7d86a3;margin-top:6px"></div>
+  </div>
+  <div class="card">
     <h2>待上传队列（连不上时保留，可单个或一键上传）</h2>
     <div id="outbox"></div>
   </div>
@@ -125,7 +144,7 @@ button.mini.danger { background: rgba(242,139,130,.2); color: #f28b82; }
     <h2>说明</h2>
     <div class="hint">
       · 「同步」把电脑上的课表/活动/倒数日/待办拉到手机；待办与活动会跟手机里未上传的合并去重。<br>
-      · 「加待办」页可新增<b>待办</b>和<b>临时活动</b>（活动可填时间/地点）；连不上时先进「待上传队列」，可单个或全部上传，进 App 也会自动补发。<br>
+      · 「加待办」页可新增<b>待办 / 临时活动 / 倒数日</b>；也支持粘贴 <b>AI 提取的 JSON</b> 一键加入（先复制提示词，让 AI 解析聊天截图）。连不上时先进「待上传队列」，可单个或全部上传，进 App 也会自动补发。<br>
       · 樱花隧道强制 HTTPS：填 http:// 会自动转 https 重试；证书不受信时本 App 已放行（个人工具 + 随机令牌）。<br>
       · 手机端只能新增，不能删除电脑上的内容（上传后由电脑管理）。
     </div>
@@ -257,6 +276,126 @@ function renderWeek() {
   });
   box.innerHTML = html;
 }
+var PROMPT_TEXT = '你是日程提取助手。用户会给你 1~5 张截图（微信群通知/作业通知/聊天记录等）。请提取其中的待办、临时活动和倒数日，只输出一个 JSON 对象，不要任何解释、代码块标记或多余文字。\n\nJSON 格式：\n{\n  "todos": [ { "text": "待办内容", "date": "YYYY-MM-DD", "deadline": "HH:MM", "points": 10 } ],\n  "events": [ { "title": "活动名称", "date": "YYYY-MM-DD", "time": "HH:MM", "location": "地点", "points": 10 } ],\n  "countdowns": [ { "title": "倒数日名称", "date": "YYYY-MM-DD", "time": "HH:MM", "color": "#ff5a5a" } ]\n}\n\n规则：\n1. 有明确截止时间的任务/作业/提交 → todos；date 填截止日期，deadline 填截止时间。\n2. 有明确开始时间和地点的会议/年级会/讲座/活动 → events。\n3. 只有日期没有具体开始时间、需要倒计时的事件（考试/系统关闭/纪念日）→ countdowns；同一条通知可拆出多条。\n4. 时间解析：以截图里最新一条消息的日期为基准推算"明天=+1天"、"本周日/本周三=最近的相应星期"；"晚上24:00/24点"→当天 23:59；"十二点半"→12:30；"下午三点"→15:00；"晚上7点"→19:00。\n5. 地点如有"改为/最新通知"的更新，取最新地点。\n6. 年份缺失用当前年份；实在无法确定日期的，date 字段省略（导入后默认今天）。\n7. 不确定的字段就省略（如无时间就不写 deadline/time），points 默认 10（提前提醒分钟）。\n8. 涉及多人的任务（如"51-81号同学提交作业"）正常提取为一条。';
+function copyText(t) {
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(function(){}, function(){}); return true; } } catch (e) {}
+  var ta = document.createElement('textarea');
+  ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  return ok;
+}
+function copyPrompt() {
+  copyText(PROMPT_TEXT);
+  flash('提示词已复制，发给多模态 AI');
+}
+function normDate(s) {
+  if (!s) return todayStr();
+  s = String(s).trim();
+  var m = s.match(/^(\d{4})[-/.]*(\d{1,2})[-/.]*(\d{1,2})$/);
+  if (m) return m[1] + '-' + String(m[2]).padStart(2,'0') + '-' + String(m[3]).padStart(2,'0');
+  m = s.match(/^(\d{1,2})[-/.]*(\d{1,2})$/);
+  if (m) { var y = new Date().getFullYear(); return y + '-' + String(m[1]).padStart(2,'0') + '-' + String(m[2]).padStart(2,'0'); }
+  if (/^明天/.test(s)) { var d = new Date(); d.setDate(d.getDate() + 1); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+  return todayStr();
+}
+function normTime(s) {
+  if (!s) return null;
+  s = String(s).trim();
+  if (/^24:00$/.test(s)) return '23:59';
+  var m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  var h = parseInt(m[1], 10), mm = parseInt(m[2], 10);
+  if (h > 23 || mm > 59) return null;
+  return String(h).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+}
+function normColor(s) {
+  if (!s) return null;
+  s = String(s).trim();
+  if (/^[0-9a-fA-F]{6}$/.test(s)) return '#' + s.toLowerCase();
+  if (/^#[0-9a-fA-F]{6}$/.test(s)) return s.toLowerCase();
+  return null;
+}
+function addCountdown() {
+  var title = $('cdTitle').value.trim();
+  if (!title) { alert('请输入倒数日内容'); return; }
+  var date = $('cdDate').value || todayStr();
+  var time = $('cdTime').value || null;
+  var item = { type: 'countdown', title: title, date: date, time: time, createdAt: Date.now() };
+  var snap = getSnap();
+  if (snap) {
+    if (!snap.countdowns) snap.countdowns = [];
+    snap.countdowns.push({ id: 'local-' + item.createdAt, title: title, date: date, time: time, color: null });
+    saveSnap(snap);
+  }
+  var out = getOutbox(); out.push(item); saveOutbox(out);
+  $('cdTitle').value = ''; $('cdTime').value = '';
+  renderOutbox();
+  flash('已加入倒数日（' + out.length + ' 条待上传）');
+  flushOutbox();
+}
+function importJson() {
+  var raw = $('jsonInput').value.trim();
+  if (!raw) { alert('请先粘贴 AI 输出的 JSON'); return; }
+  var obj = null;
+  try { obj = JSON.parse(raw); } catch (e) { alert('JSON 解析失败：' + e.message); return; }
+  if (!obj || typeof obj !== 'object') { alert('JSON 结构不对'); return; }
+  var added = { todo: 0, event: 0, countdown: 0 }, failed = 0;
+  var out = getOutbox();
+  function pushTodo(x) {
+    if (!x || !x.text) { failed++; return; }
+    var item = { type: 'todo', text: String(x.text).trim(), date: normDate(x.date), deadline: normTime(x.deadline || x.time), points: parseInt(x.points, 10) || 10, createdAt: Date.now() };
+    out.push(item); added.todo++;
+    var snap = getSnap();
+    if (snap) {
+      if (!snap.todos) snap.todos = {};
+      if (!snap.todos[item.date]) snap.todos[item.date] = [];
+      snap.todos[item.date].push({ id: 'local-' + item.createdAt, text: item.text, deadline: item.deadline, done: false });
+      saveSnap(snap);
+    }
+  }
+  function pushEvent(x) {
+    if (!x || !x.title) { failed++; return; }
+    var item = { type: 'event', title: String(x.title).trim(), date: normDate(x.date), time: normTime(x.time), location: (x.location ? String(x.location).trim() : null), points: parseInt(x.points, 10) || 10, createdAt: Date.now() };
+    out.push(item); added.event++;
+    var snap = getSnap();
+    if (snap) {
+      if (!snap.events) snap.events = [];
+      snap.events.push({ id: 'local-' + item.createdAt, title: item.title, date: item.date, time: item.time, location: item.location });
+      saveSnap(snap);
+    }
+  }
+  function pushCountdown(x) {
+    if (!x || !x.title) { failed++; return; }
+    var item = { type: 'countdown', title: String(x.title).trim(), date: normDate(x.date), time: normTime(x.time), color: normColor(x.color), createdAt: Date.now() };
+    out.push(item); added.countdown++;
+    var snap = getSnap();
+    if (snap) {
+      if (!snap.countdowns) snap.countdowns = [];
+      snap.countdowns.push({ id: 'local-' + item.createdAt, title: item.title, date: item.date, time: item.time, color: item.color });
+      saveSnap(snap);
+    }
+  }
+  var lists = [ ['todos','todo'], ['待办','todo'], ['events','event'], ['活动','event'], ['countdowns','countdown'], ['倒数日','countdown'] ];
+  for (var i = 0; i < lists.length; i++) {
+    var arr = obj[lists[i][0]];
+    if (!Array.isArray(arr)) continue;
+    arr.forEach(function(x){
+      if (lists[i][1] === 'todo') pushTodo(x);
+      else if (lists[i][1] === 'event') pushEvent(x);
+      else pushCountdown(x);
+    });
+  }
+  if (!added.todo && !added.event && !added.countdown && !failed) { alert('JSON 里没有可识别的待办/活动/倒数日字段（应为 todos/events/countdowns）'); return; }
+  saveOutbox(out);
+  $('jsonInput').value = '';
+  $('jsonResult').textContent = '已加入：待办 ' + added.todo + ' 条、活动 ' + added.event + ' 条、倒数日 ' + added.countdown + ' 条' + (failed ? '（跳过 ' + failed + ' 条缺内容的）' : '') + ' · 待上传 ' + out.length + ' 条';
+  renderOutbox();
+  renderToday(); renderWeek();
+  flash('已加入 ' + (added.todo + added.event + added.countdown) + ' 条');
+  flushOutbox();
+}
 function addTodo() {
   var text = $('inText').value.trim();
   if (!text) { alert('请输入待办内容'); return; }
@@ -302,9 +441,9 @@ function renderOutbox() {
   var box = $('outbox');
   if (!out.length) { box.innerHTML = '<div class="empty">暂无待上传</div>'; return; }
   var rows = out.map(function(it){
-    var tag = it.type === 'event' ? '活动' : '待办';
+    var tag = it.type === 'event' ? '活动' : (it.type === 'countdown' ? '倒数日' : '待办');
     var main = esc(it.type === 'event' ? it.title : it.text);
-    var sub = esc(it.date) + (it.type === 'event' ? (it.time ? ' ' + esc(it.time) : '') : (it.deadline ? ' ' + esc(it.deadline) : ''));
+    var sub = esc(it.date) + (it.type === 'event' || it.type === 'countdown' ? (it.time ? ' ' + esc(it.time) : '') : (it.deadline ? ' ' + esc(it.deadline) : ''));
     if (it.location) sub += ' ' + esc(it.location);
     return '<div class="qrow"><span class="qtag">' + tag + '</span><span class="qmain">' + main + '<span class="qsub">' + sub + '</span></span>' +
       '<button class="mini" onclick="uploadOne(' + it.createdAt + ')">上传</button>' +
@@ -315,6 +454,9 @@ function renderOutbox() {
 function sendOne(item) {
   if (item.type === 'event') {
     return apiFetch('/api/event', { method: 'POST', body: JSON.stringify({ title: item.title, date: item.date, time: item.time || null, location: item.location || null, points: [item.points || 10] }) });
+  }
+  if (item.type === 'countdown') {
+    return apiFetch('/api/countdown', { method: 'POST', body: JSON.stringify({ title: item.title, date: item.date, time: item.time || null, color: item.color || null }) });
   }
   return apiFetch('/api/todo', { method: 'POST', body: JSON.stringify({ text: item.text, date: item.date, deadline: item.deadline || null, points: [item.points || 10] }) });
 }
@@ -380,6 +522,10 @@ function doSync() {
         if (item.type === 'event') {
           var dupE = d.events.some(function(e){ return e.title === item.title && e.date === item.date && (e.time || null) === (item.time || null); });
           if (!dupE) d.events.push({ id: 'local-' + item.createdAt, title: item.title, date: item.date, time: item.time || null, location: item.location || null });
+        } else if (item.type === 'countdown') {
+          if (!d.countdowns) d.countdowns = [];
+          var dupC = d.countdowns.some(function(c){ return c.title === item.title && c.date === item.date; });
+          if (!dupC) d.countdowns.push({ id: 'local-' + item.createdAt, title: item.title, date: item.date, time: item.time || null, color: item.color || null });
         } else {
           var arr = d.todos[item.date] || (d.todos[item.date] = []);
           var dup = arr.some(function(t){ return t.text === item.text && (t.deadline || null) === (item.deadline || null); });
@@ -420,6 +566,7 @@ function renderSettings() {
 function boot() {
   $('inDate').value = todayStr();
   $('evDate').value = todayStr();
+  $('cdDate').value = todayStr();
   renderToday(); renderWeek(); renderOutbox(); renderSettings();
   goto('today');
   flushOutbox();

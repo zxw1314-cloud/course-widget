@@ -11,9 +11,9 @@ v0.2.1 的 APK 是 WebView 套壳加载电脑端网页：PC 不在线就打不�
 2. **API 扩展（电脑端）**：
    - 新增 `GET /api/schedule`（token 鉴权）→ 全量快照：日期/周次/作息表/课程简写/课程/活动/倒数日/全部待办。
    - 手机桥所有响应加 CORS 头（`Access-Control-Allow-Origin: *` 等）+ 处理 `OPTIONS` 预检——内置页面是 `file://` 源，跨域调电脑必须放行。
-   - 原有 `/api/today`、`/api/todo`、`/api/health` 不变（网页/PWA 在线模式继续用）；新增 `POST /api/event`（手机新增临时活动：title 必填，date/time/location/points 可选）。
+   - 原有 `/api/today`、`/api/todo`、`/api/health` 不变（网页/PWA 在线模式继续用）；新增 `POST /api/event`（手机新增临时活动：title 必填，date/time/location/points 可选）；新增 `POST /api/countdown`（手机新增倒数日：title/date 必填，time/color 可选）。
 3. **同步语义**：「同步到手机」= 拉取 `/api/schedule` 全量覆盖本地课程/活动/倒数日；待办与本地"未上传项"按 (text+deadline) 合并去重，不丢已加未传的。手机端仍只增不改不删（沿用 ADR-0007）。
-4. **上传与离线队列**：新增待办/临时活动先写本地快照 + 进上传队列，尝试立即 POST `/api/todo` 或 `/api/event`；失败保留，进 App / 每 20 秒自动补发 / 手动上传（支持单个或全部）。
+4. **上传与离线队列**：新增待办/临时活动/倒数日先写本地快照 + 进上传队列，尝试立即 POST `/api/todo`、`/api/event` 或 `/api/countdown`；失败保留，进 App / 每 20 秒自动补发 / 手动上传（支持单个或全部）。
 5. **樱花 HTTPS**：页面 fetch 检测到 HTTP 501（樱花强制 HTTPS 重定向页）自动换 https 重试一次；WebView `onReceivedSslError → handler.proceed()` 放行不受信证书（个人工具 + 随机 token 的既定取舍，不做证书 pinning）。
 6. **网页/PWA 模式保持在线现状**，不做本地化。
 

@@ -454,6 +454,25 @@ function handleMobileRequest(req, res) {
     });
     return;
   }
+  if (req.method === 'POST' && pathname === '/api/countdown') {
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 16384) req.destroy(); });
+    req.on('end', () => {
+      let o = null;
+      try { o = JSON.parse(body); } catch (e) { sendJson(res, 400, { error: 'bad json' }); return; }
+      const title = String(o.title || '').trim();
+      if (!title) { sendJson(res, 400, { error: 'title required' }); return; }
+      let date = String(o.date || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = dateKey(new Date());
+      const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(o.time || '')) ? String(o.time) : null;
+      const color = /^#[0-9a-fA-F]{6}$/.test(String(o.color || '')) ? String(o.color).toLowerCase() : null;
+      const cd = { id: Math.random().toString(36).slice(2, 10), title, date, time, location: null, color };
+      data.countdowns.push(cd);
+      saveData(); broadcastDataChanged();
+      sendJson(res, 200, { ok: true, countdown: cd });
+    });
+    return;
+  }
   sendJson(res, 404, { error: 'not found' });
 }
 function startMobileServer() {
