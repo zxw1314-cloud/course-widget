@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('api', {
   hideWidget: () => ipcRenderer.invoke('widget:hide'),
   setWidgetBounds: (opts) => ipcRenderer.invoke('widget:setBounds', opts),
   snapCorner: (corner) => ipcRenderer.invoke('widget:snapCorner', corner),
+  foldWidget: () => ipcRenderer.invoke('widget:foldToggle'),
+  onFoldState: (cb) => { const h = (_e, v) => cb(v); ipcRenderer.on('widget:foldState', h); return () => ipcRenderer.removeListener('widget:foldState', h); },
   setInteractiveAreas: (areas) => ipcRenderer.invoke('widget:setInteractiveAreas', areas),
   setDragActive: (on) => ipcRenderer.invoke('widget:setDragActive', on),
   getWidgetBounds: () => ipcRenderer.invoke('widget:getBounds'),

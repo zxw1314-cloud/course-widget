@@ -40,6 +40,14 @@ button.add:hover { opacity: .9; }
 <div id="popup">
   <div class="head"><span class="title" id="title"></span><button id="btnClose">✕</button></div>
 
+<div class="sec">
+  <h4>⚡ 速记（一句话：日期 时间 内容 @地点）</h4>
+  <div class="form" style="gap:6px">
+    <input class="txt-input" id="quickText" placeholder="如：周三15:00 年级会 @综合楼509 / 周四交实验报告 18:00" style="flex:1">
+    <button class="add" id="btnQuick">速记</button>
+  </div>
+  <div id="quickMsg" style="font-size:11px;color:#8a91a5;margin-top:2px"></div>
+</div>
   <div class="sec"><h4>📖 课程</h4><div id="courses"></div></div>
 
   <div class="sec todo"><h4>✅ 待办（黄）</h4><div id="todos"></div>
@@ -52,6 +60,8 @@ button.add:hover { opacity: .9; }
       <div class="rm">
         <span>提醒(提前分钟,逗号分隔):</span><input id="tPoints" placeholder="10,60">
         <span>重复:</span><input id="tRepStart" type="number" min="0" placeholder="开始前" style="width:52px">分钟/每<input id="tRepEvery" type="number" min="1" placeholder="10" style="width:46px">分钟
+    <span>日程重复:</span>
+    <select id="tRepeat"><option value="">不重复</option><option value="weekly">每周</option><option value="daily">每天</option></select>
       </div>
     </div>
   </div>
@@ -67,6 +77,8 @@ button.add:hover { opacity: .9; }
       <div class="rm">
         <span>提醒(提前分钟,逗号分隔):</span><input id="ePoints" placeholder="10,60">
         <span>重复:</span><input id="eRepStart" type="number" min="0" placeholder="开始前" style="width:52px">分钟/每<input id="eRepEvery" type="number" min="1" placeholder="10" style="width:46px">分钟
+    <span>日程重复:</span>
+    <select id="eRepeat"><option value="">不重复</option><option value="weekly">每周</option><option value="daily">每天</option></select>
       </div>
     </div>
   </div>

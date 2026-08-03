@@ -21,7 +21,7 @@ h1 { font-size: 18px; margin: 14px 2px 4px; }
 .item .txt { flex: 1; min-width: 0; }
 .item .loc { color: #7d86a3; font-size: 11px; }
 .todo.done { text-decoration: line-through; opacity: .5; }
-input { width: 100%; padding: 9px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #eef1f8; font-size: 14px; margin: 4px 0 8px; }
+input, select { width: 100%; padding: 9px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #eef1f8; font-size: 14px; margin: 4px 0 8px; }
 .row { display: flex; gap: 8px; } .row > * { flex: 1; min-width: 0; }
 button.act { width: 100%; padding: 11px; border: none; border-radius: 10px; background: #4080ff; color: #fff; font-size: 15px; font-weight: 600; margin-top: 4px; cursor: pointer; }
 button.ghost { background: rgba(255,255,255,0.08); color: #cfe0ff; }
@@ -48,6 +48,7 @@ button.mini.danger { background: rgba(242,139,130,.2); color: #f28b82; }
 .qtag { flex: 0 0 auto; font-size: 11px; color: #cfe0ff; background: rgba(64,128,255,.2); border-radius: 6px; padding: 1px 6px; }
 .qmain { flex: 1; min-width: 0; font-size: 13px; }
 .qsub { display: block; color: #7d86a3; font-size: 11px; }
+input[type=checkbox] { width: auto; margin: 0 4px 0 0; }
 textarea { width: 100%; min-height: 110px; padding: 9px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #eef1f8; font-size: 13px; font-family: Consolas, monospace; margin: 4px 0 8px; }
 #flash { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); background: rgba(64,128,255,.92); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 9; white-space: nowrap; }
 #flash.show { opacity: 1; }
@@ -77,6 +78,13 @@ textarea { width: 100%; min-height: 110px; padding: 9px; border-radius: 8px; bor
 
 <div id="panelAdd" class="panel">
   <div class="card">
+    <h2>智能速记（一句话：日期 时间 内容 @地点）</h2>
+    <div class="fld">例如：周三15:00 年级会 @综合楼509 · 周四交实验报告 18:00 · 12.14 四级考试</div>
+    <input id="quickInput" placeholder="一句话速记" autocomplete="off">
+    <button class="act" id="btnQuick" onclick="applyQuick()">解析加入</button>
+    <div id="quickMsg" style="font-size:12px;color:#7d86a3;margin-top:6px"></div>
+  </div>
+  <div class="card">
     <h2>新增待办（先存手机，连上后自动上传）</h2>
     <div class="fld">待办内容</div>
     <input id="inText" placeholder="如：交实验报告" autocomplete="off">
@@ -86,6 +94,8 @@ textarea { width: 100%; min-height: 110px; padding: 9px; border-radius: 8px; bor
     </div>
     <div class="fld">提前提醒（分钟，留空默认 10）</div>
     <input id="inPoints" type="number" min="0" value="10">
+    <div class="fld">重复</div>
+    <select id="tRepeat"><option value="">不重复</option><option value="weekly">每周</option><option value="daily">每天</option></select>
     <button class="act" id="btnAddTodo" onclick="addTodo()">加入待办</button>
   </div>
   <div class="card">
@@ -100,6 +110,8 @@ textarea { width: 100%; min-height: 110px; padding: 9px; border-radius: 8px; bor
     <input id="evLoc" placeholder="如：综合楼 201" autocomplete="off">
     <div class="fld">提前提醒（分钟，留空默认 10）</div>
     <input id="evPoints" type="number" min="0" value="10">
+    <div class="fld">重复</div>
+    <select id="eRepeat"><option value="">不重复</option><option value="weekly">每周</option><option value="daily">每天</option></select>
     <button class="act" id="btnAddEvent" onclick="addEvent()">加入活动</button>
   </div>
   <div class="card">
@@ -133,6 +145,7 @@ textarea { width: 100%; min-height: 110px; padding: 9px; border-radius: 8px; bor
     <input id="setUrl" placeholder="http://192.168.x.x:8723" autocomplete="off">
     <div class="set-label">访问令牌（电脑「设置 → 手机连接」里查看）</div>
     <input id="setToken" placeholder="cw-xxxx" autocomplete="off">
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#eef1f8;margin:8px 0 0"><input id="setAutoSync" type="checkbox" onchange="setAutoSync(this.checked)"> 打开 App 时自动同步课表</label>
     <button class="act" onclick="saveSettings()">保存设置</button>
     <div class="row" style="margin-top:12px">
       <button class="act ghost" onclick="doSync()">同步到手机</button>
@@ -207,10 +220,11 @@ function renderToday() {
   var cs = todayCourses(snap);
   list.innerHTML = cs.length ? cs.map(function(c){ return '<div class="item"><span class="tm">' + esc(c.start) + '</span><span class="txt">' + esc(c.abbr || c.name) + '</span>' + (c.location ? '<span class="loc"> ' + esc(c.location) + '</span>' : '') + '</div>'; }).join('') : '<div class="empty">今天没课</div>';
   var tk = todayStr();
-  var todos = (snap.todos && snap.todos[tk]) || [];
-  t.innerHTML = todos.length ? todos.map(function(x){ return '<div class="item todo' + (x.done ? ' done' : '') + '"><span class="tm">' + (x.deadline ? esc(x.deadline) : '') + '</span><span class="txt">' + esc(x.text) + '</span></div>'; }).join('') : '<div class="empty">暂无待办</div>';
-  var evs = (snap.events || []).filter(function(x){ return x.date === tk; });
-  e.innerHTML = evs.length ? evs.map(function(x){ return '<div class="item"><span class="tm">' + (x.time ? esc(x.time) : '全天') + '</span><span class="txt">' + esc(x.title) + '</span>' + (x.location ? '<span class="loc"> ' + esc(x.location) + '</span>' : '') + '</div>'; }).join('') : '<div class="empty">暂无活动</div>';
+  var todos = [];
+  for (var dk in (snap.todos || {})) { (snap.todos[dk] || []).forEach(function(x){ if (occursOn(x, dk, tk)) todos.push(x); }); }
+  t.innerHTML = todos.length ? todos.map(function(x){ return '<div class="item todo' + (x.done ? ' done' : '') + '"><span class="tm">' + (x.deadline ? esc(x.deadline) : '') + '</span><span class="txt">' + esc(x.text) + (x.repeat === 'weekly' ? ' [每周]' : (x.repeat === 'daily' ? ' [每天]' : '')) + '</span></div>'; }).join('') : '<div class="empty">暂无待办</div>';
+  var evs = (snap.events || []).filter(function(x){ return occursOn(x, x.date, tk); });
+  e.innerHTML = evs.length ? evs.map(function(x){ return '<div class="item"><span class="tm">' + (x.time ? esc(x.time) : '全天') + '</span><span class="txt">' + esc(x.title) + (x.repeat === 'weekly' ? ' [每周]' : (x.repeat === 'daily' ? ' [每天]' : '')) + '</span>' + (x.location ? '<span class="loc"> ' + esc(x.location) + '</span>' : '') + '</div>'; }).join('') : '<div class="empty">暂无活动</div>';
   var cds = (snap.countdowns || []).filter(function(x){ return x.date && x.date >= tk; }).sort(function(a,b){ return a.date.localeCompare(b.date); }).slice(0, 3);
   cd.innerHTML = cds.length ? cds.map(function(x){ var days = Math.round((new Date(x.date) - new Date(tk)) / 86400000); return '<div class="item"><span class="tm">' + (days === 0 ? '就是今天' : '还有 ' + days + ' 天') + '</span><span class="txt">' + esc(x.title) + (x.time ? ' ' + esc(x.time) : '') + '</span>' + (x.location ? '<span class="loc"> ' + esc(x.location) + '</span>' : '') + '</div>'; }).join('') : '<div class="empty">暂无倒数日</div>';
 }
@@ -345,24 +359,26 @@ function importJson() {
   var out = getOutbox();
   function pushTodo(x) {
     if (!x || !x.text) { failed++; return; }
-    var item = { type: 'todo', text: String(x.text).trim(), date: normDate(x.date), deadline: normTime(x.deadline || x.time), points: parseInt(x.points, 10) || 10, createdAt: Date.now() };
+    var repT = x.repeat === 'weekly' || x.repeat === '每天' || x.repeat === '每周' ? 'weekly' : (x.repeat === 'daily' || x.repeat === '每日' ? 'daily' : null);
+    var item = { type: 'todo', text: String(x.text).trim(), date: normDate(x.date), deadline: normTime(x.deadline || x.time), points: parseInt(x.points, 10) || 10, repeat: repT, createdAt: Date.now() };
     out.push(item); added.todo++;
     var snap = getSnap();
     if (snap) {
       if (!snap.todos) snap.todos = {};
       if (!snap.todos[item.date]) snap.todos[item.date] = [];
-      snap.todos[item.date].push({ id: 'local-' + item.createdAt, text: item.text, deadline: item.deadline, done: false });
+      snap.todos[item.date].push({ id: 'local-' + item.createdAt, text: item.text, deadline: item.deadline, done: false, repeat: item.repeat || null });
       saveSnap(snap);
     }
   }
   function pushEvent(x) {
     if (!x || !x.title) { failed++; return; }
-    var item = { type: 'event', title: String(x.title).trim(), date: normDate(x.date), time: normTime(x.time), location: (x.location ? String(x.location).trim() : null), points: parseInt(x.points, 10) || 10, createdAt: Date.now() };
+    var repE = x.repeat === 'weekly' || x.repeat === '每天' || x.repeat === '每周' ? 'weekly' : (x.repeat === 'daily' || x.repeat === '每日' ? 'daily' : null);
+    var item = { type: 'event', title: String(x.title).trim(), date: normDate(x.date), time: normTime(x.time), location: (x.location ? String(x.location).trim() : null), points: parseInt(x.points, 10) || 10, repeat: repE, createdAt: Date.now() };
     out.push(item); added.event++;
     var snap = getSnap();
     if (snap) {
       if (!snap.events) snap.events = [];
-      snap.events.push({ id: 'local-' + item.createdAt, title: item.title, date: item.date, time: item.time, location: item.location });
+      snap.events.push({ id: 'local-' + item.createdAt, title: item.title, date: item.date, time: item.time, location: item.location, repeat: item.repeat || null });
       saveSnap(snap);
     }
   }
@@ -396,18 +412,142 @@ function importJson() {
   flash('已加入 ' + (added.todo + added.event + added.countdown) + ' 条');
   flushOutbox();
 }
+function occursOn(item, fromDate, targetDate) {
+  var r = item && item.repeat;
+  if (r === 'daily') return true;
+  if (r === 'weekly' && fromDate && targetDate) return (new Date(fromDate + 'T00:00:00').getDay()) === (new Date(targetDate + 'T00:00:00').getDay());
+  return fromDate === targetDate;
+}
+function keyFromDate(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function keyFromYMD(y, m, dd) { return y + '-' + String(m).padStart(2,'0') + '-' + String(dd).padStart(2,'0'); }
+function parseQuickDate(text, baseKey) {
+  var base = new Date(baseKey + 'T00:00:00');
+  var m = text.match(/(\d{4})[-/.]?(\d{1,2})[-/.]?(\d{1,2})/);
+  if (m) return keyFromYMD(+m[1], +m[2], +m[3]);
+  m = text.match(/(\d{1,2})月(\d{1,2})[日号]?/);
+  if (m) return keyFromYMD(base.getFullYear(), +m[1], +m[2]);
+  m = text.match(/(\d{1,2})[-/.](\d{1,2})/);
+  if (m) return keyFromYMD(base.getFullYear(), +m[1], +m[2]);
+  if (/后天/.test(text)) { var d3 = new Date(base); d3.setDate(d3.getDate() + 2); return keyFromDate(d3); }
+  if (/明天/.test(text)) { var d4 = new Date(base); d4.setDate(d4.getDate() + 1); return keyFromDate(d4); }
+  if (/今天|今日/.test(text)) return baseKey;
+  var wm = text.match(/(?:下|这)?(?:周|星期|礼拜)([一二三四五六日天])/);
+  if (wm) {
+    var map = { '一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7 };
+    var target = map[wm[1]];
+    var bw = base.getDay() === 0 ? 7 : base.getDay();
+    var diff = target - bw; if (diff <= 0) diff += 7;
+    if (wm[0].indexOf('下') >= 0) diff += 7;
+    var d5 = new Date(base); d5.setDate(d5.getDate() + diff);
+    return keyFromDate(d5);
+  }
+  return baseKey;
+}
+function parseQuickTime(text) {
+  var m = text.match(/(\d{1,2})[:：](\d{2})/);
+  if (m) { var h = +m[1], mm = +m[2]; if (h === 24 && mm === 0) return '23:59'; if (h > 23 || mm > 59) return null; return String(h).padStart(2,'0') + ':' + String(mm).padStart(2,'0'); }
+  m = text.match(/(凌晨|早上|上午|中午|下午|晚上|晚)?(\d{1,2})点(?:半|(\d{1,2})分?)?/);
+  if (m) {
+    var hh = +m[2]; var mm2 = m[3] ? +m[3] : 0; var pre = m[1] || '';
+    if (m[0].indexOf('半') >= 0) mm2 = 30;
+    if (mm2 > 59) return null;
+    if (pre === '下午' || pre === '晚上' || pre === '晚') { if (hh < 12) hh += 12; }
+    else if (pre === '中午') { hh = 12; }
+    else if ((pre === '凌晨' || pre === '早上' || pre === '上午') && hh === 12) { hh = 0; }
+    return String(hh).padStart(2,'0') + ':' + String(mm2).padStart(2,'0');
+  }
+  if (/24点|24:00|晚上24/.test(text)) return '23:59';
+  return null;
+}
+function parseQuick(text, baseKey) {
+  text = String(text || '').trim();
+  if (!text) return null;
+  var loc = null;
+  var lm = text.match(/@([^\s，,。]+)/);
+  if (lm) loc = lm[1];
+  var date = parseQuickDate(text, baseKey);
+  var time = parseQuickTime(text);
+  var repeat = /每天|每日/.test(text) ? 'daily' : (/每周|每个(?:周|星期)/.test(text) ? 'weekly' : null);
+  var points = 10;
+  var pm = text.match(/(?:提醒|提前)(\d+)\s*(?:分钟|小时)/);
+  if (pm) points = /小时/.test(pm[0]) ? (+pm[1]) * 60 : +pm[1];
+  var type;
+  if (/倒数|还有\d+天|距离.+还有/.test(text)) type = 'countdown';
+  else if (/考试/.test(text) && !time) type = 'countdown';
+  else if (/作业|提交|截止|完成|做完|签到|打卡|上传|交/.test(text)) type = 'todo';
+  else if (/活动|会议|讲座|大会|班会|团会|比赛|排练|聚会|晚会|聚餐|例会|年级会|开会/.test(text)) type = 'event';
+  else type = (time && loc) ? 'event' : 'todo';
+  var body = text
+    .replace(/(\d{4})[-/.]?(\d{1,2})[-/.]?(\d{1,2})/g, ' ')
+    .replace(/(\d{1,2})月(\d{1,2})[日号]?/g, ' ')
+    .replace(/(\d{1,2})[-/.](\d{1,2})/g, ' ')
+    .replace(/(凌晨|早上|上午|中午|下午|晚上|晚)?\d{1,2}点(?:半|\d{1,2}分?)?/g, ' ')
+    .replace(/\d{1,2}[:：]\d{2}/g, ' ')
+    .replace(/@\S+/g, ' ')
+    .replace(/今天|今日|明天|后天/g, ' ')
+    .replace(/(?:下|这)?(?:周|星期|礼拜)[一二三四五六日天]/g, ' ')
+    .replace(/(?:提醒|提前)\d+\s*(?:分钟|小时)/g, ' ')
+    .replace(/每周|每个(?:周|星期)|每天|每日/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  var clean = body || text;
+  if (type === 'countdown') return { type: 'countdown', title: clean, date: date, time: time };
+  if (type === 'event') return { type: 'event', title: clean, date: date, time: time, location: loc, points: points, repeat: repeat };
+  return { type: 'todo', text: clean, date: date, deadline: time, points: points, repeat: repeat };
+}
+function applyQuick() {
+  var msg = $('quickMsg');
+  var p = parseQuick($('quickInput').value, todayStr());
+  if (!p) { msg.textContent = '输入为空'; return; }
+  var out = getOutbox();
+  if (p.type === 'todo') {
+    var item = { type: 'todo', text: p.text, date: p.date, deadline: p.deadline, points: p.points || 10, repeat: p.repeat || null, createdAt: Date.now() };
+    out.push(item);
+    var snap = getSnap();
+    if (snap) {
+      if (!snap.todos) snap.todos = {};
+      if (!snap.todos[p.date]) snap.todos[p.date] = [];
+      snap.todos[p.date].push({ id: 'local-' + item.createdAt, text: p.text, deadline: p.deadline, done: false, repeat: p.repeat || null });
+      saveSnap(snap);
+    }
+  } else if (p.type === 'event') {
+    var item2 = { type: 'event', title: p.title, date: p.date, time: p.time, location: p.location, points: p.points || 10, repeat: p.repeat || null, createdAt: Date.now() };
+    out.push(item2);
+    var snap2 = getSnap();
+    if (snap2) {
+      if (!snap2.events) snap2.events = [];
+      snap2.events.push({ id: 'local-' + item2.createdAt, title: p.title, date: p.date, time: p.time, location: p.location, repeat: p.repeat || null });
+      saveSnap(snap2);
+    }
+  } else {
+    var item3 = { type: 'countdown', title: p.title, date: p.date, time: p.time, createdAt: Date.now() };
+    out.push(item3);
+    var snap3 = getSnap();
+    if (snap3) {
+      if (!snap3.countdowns) snap3.countdowns = [];
+      snap3.countdowns.push({ id: 'local-' + item3.createdAt, title: p.title, date: p.date, time: p.time, color: null });
+      saveSnap(snap3);
+    }
+  }
+  saveOutbox(out);
+  $('quickInput').value = '';
+  var tag = { todo: '待办', event: '活动', countdown: '倒数日' }[p.type];
+  msg.textContent = '已加入' + tag + '（' + p.date + (p.time ? ' ' + p.time : '') + '）' + (p.repeat ? ' · 重复' + (p.repeat === 'weekly' ? '每周' : '每天') : '');
+  renderOutbox(); renderToday(); renderWeek();
+  flushOutbox();
+}
 function addTodo() {
   var text = $('inText').value.trim();
   if (!text) { alert('请输入待办内容'); return; }
   var date = $('inDate').value || todayStr();
   var deadline = $('inTime').value || null;
   var points = $('inPoints').value ? parseInt($('inPoints').value, 10) : 10;
-  var item = { type: 'todo', text: text, date: date, deadline: deadline, points: points, createdAt: Date.now() };
+  var repeat = $('tRepeat').value || null;
+  var item = { type: 'todo', text: text, date: date, deadline: deadline, points: points, repeat: repeat, createdAt: Date.now() };
   var snap = getSnap();
   if (snap) {
     if (!snap.todos) snap.todos = {};
     if (!snap.todos[date]) snap.todos[date] = [];
-    snap.todos[date].push({ id: 'local-' + item.createdAt, text: text, deadline: deadline, done: false });
+    snap.todos[date].push({ id: 'local-' + item.createdAt, text: text, deadline: deadline, done: false, repeat: repeat });
     saveSnap(snap);
   }
   var out = getOutbox(); out.push(item); saveOutbox(out);
@@ -423,11 +563,12 @@ function addEvent() {
   var time = $('evTime').value || null;
   var location = $('evLoc').value.trim() || null;
   var points = $('evPoints').value ? parseInt($('evPoints').value, 10) : 10;
-  var item = { type: 'event', title: title, date: date, time: time, location: location, points: points, createdAt: Date.now() };
+  var repeat = $('eRepeat').value || null;
+  var item = { type: 'event', title: title, date: date, time: time, location: location, points: points, repeat: repeat, createdAt: Date.now() };
   var snap = getSnap();
   if (snap) {
     if (!snap.events) snap.events = [];
-    snap.events.push({ id: 'local-' + item.createdAt, title: title, date: date, time: time, location: location });
+    snap.events.push({ id: 'local-' + item.createdAt, title: title, date: date, time: time, location: location, repeat: repeat });
     saveSnap(snap);
   }
   var out = getOutbox(); out.push(item); saveOutbox(out);
@@ -453,12 +594,12 @@ function renderOutbox() {
 }
 function sendOne(item) {
   if (item.type === 'event') {
-    return apiFetch('/api/event', { method: 'POST', body: JSON.stringify({ title: item.title, date: item.date, time: item.time || null, location: item.location || null, points: [item.points || 10] }) });
+    return apiFetch('/api/event', { method: 'POST', body: JSON.stringify({ title: item.title, date: item.date, time: item.time || null, location: item.location || null, points: [item.points || 10], repeat: item.repeat || null }) });
   }
   if (item.type === 'countdown') {
     return apiFetch('/api/countdown', { method: 'POST', body: JSON.stringify({ title: item.title, date: item.date, time: item.time || null, color: item.color || null }) });
   }
-  return apiFetch('/api/todo', { method: 'POST', body: JSON.stringify({ text: item.text, date: item.date, deadline: item.deadline || null, points: [item.points || 10] }) });
+  return apiFetch('/api/todo', { method: 'POST', body: JSON.stringify({ text: item.text, date: item.date, deadline: item.deadline || null, points: [item.points || 10], repeat: item.repeat || null }) });
 }
 function uploadOne(createdAt) {
   var out = getOutbox();
@@ -551,6 +692,7 @@ function saveSettings() {
   flash('已保存');
   flushOutbox();
 }
+function setAutoSync(on) { localStorage.setItem('cw_auto_sync', on ? '1' : '0'); renderSettings(); if (on) { doSync(); } }
 function renderSettings() {
   var s = getServer();
   if (s) { $('setUrl').value = s.url || ''; $('setToken').value = s.token || ''; }
@@ -560,6 +702,10 @@ function renderSettings() {
   lines.push('服务器：' + (s && s.url ? esc(s.url) : '未设置'));
   lines.push('上次同步：' + (snap && snap.syncedAt ? fmtTime(snap.syncedAt) : '从未同步'));
   lines.push('本地课表：' + (snap && snap.courses ? ('第 ' + (snap.weekNumber || '?') + ' 周 · ' + snap.courses.length + ' 门课') : '无'));
+  var auto = localStorage.getItem('cw_auto_sync') === '1';
+  var as = $('setAutoSync');
+  if (as) as.checked = auto;
+  lines.push('自动同步：' + (auto ? '开' : '关'));
   lines.push('待上传：' + out.length + ' 条');
   $('setStatus').innerHTML = lines.map(function(x){ return '<div>' + x + '</div>'; }).join('');
 }
@@ -570,6 +716,7 @@ function boot() {
   renderToday(); renderWeek(); renderOutbox(); renderSettings();
   goto('today');
   flushOutbox();
+  if (localStorage.getItem('cw_auto_sync') === '1' && serverUrl()) doSync();
   setInterval(flushOutbox, 20000);
 }
 boot();

@@ -416,6 +416,7 @@ function renderSettings() {
   $('setWeekStrip').checked = !!data.settings.showWeekStrip;
   $('setAutostart').checked = !!data.settings.autostart;
   $('setShowCountdown').checked = !!data.settings.showCountdown;
+  $('setAutoFold').checked = !!data.settings.autoFold;
   $('setBell').checked = !!data.settings.bellEnabled;
   $('setMobileBridge').checked = !!data.settings.mobileBridgeEnabled;
   $('setMobileMode').value = data.settings.mobileBridgeMode || 'both';
@@ -452,6 +453,7 @@ $('setMerge').addEventListener('change', (e) => { data.settings.mergeConsecutive
 $('setWeekStrip').addEventListener('change', (e) => { data.settings.showWeekStrip = e.target.checked; markDirty(); });
 $('setAutostart').addEventListener('change', async (e) => { data.settings.autostart = e.target.checked; await window.api.setAutostart(e.target.checked); });
 $('setShowCountdown').addEventListener('change', (e) => { data.settings.showCountdown = e.target.checked; markDirty(); });
+$('setAutoFold').addEventListener('change', (e) => { data.settings.autoFold = e.target.checked; markDirty(); });
 $('setMobileBridge').addEventListener('change', (e) => {
   data.settings.mobileBridgeEnabled = e.target.checked; markDirty(); refreshMobileInfo();
 });

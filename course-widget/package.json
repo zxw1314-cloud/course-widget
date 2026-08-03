@@ -1,7 +1,7 @@
 {
   "name": "course-widget",
   "productName": "桌面课表备忘录",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "每周课表 + 上课提醒 + 临时活动 + 半透明壁纸挂件（点击日期添加待办）",
   "author": "Czj30",
   "main": "main.js",

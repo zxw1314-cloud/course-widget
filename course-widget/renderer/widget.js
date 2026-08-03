@@ -282,6 +282,10 @@ document.querySelectorAll('.rz').forEach(z => {
 $('btnMove').addEventListener('pointerdown', (e) => beginDrag(e, 'move', null));
 $('btnHide').addEventListener('click', () => window.api.hideWidget());
 $('btnGear').addEventListener('click', () => window.api.openSetup());
+if (window.api.foldWidget) {
+  $('btnFold').addEventListener('click', () => window.api.foldWidget());
+  window.api.onFoldState((v) => { document.body.classList.toggle('collapsed', !!v); });
+}
 
 (async () => {
   data = await window.api.getData();

@@ -40,7 +40,7 @@ function defaultData() {
       mergeConsecutive: true, // 挂件把同一课程连续节次合并成一个大框（显示起止时间）
       mobileBridgeEnabled: false, mobileBridgeMode: 'both', mobileToken: null, // 手机远程桥（局域网/樱花frp）
       widgetWidth: 900, widgetHeight: null, widgetX: null, widgetY: null, widgetCorner: 'bottomRight',
-      bellEnabled: false, bellVolume: 0.8, bellPreset: 'school-bell', showCountdown: true
+      bellEnabled: false, bellVolume: 0.8, bellPreset: 'school-bell', showCountdown: true, autoFold: false
     },
     periods: [
       { index: 1, start: '08:00', end: '08:45' }, { index: 2, start: '09:00', end: '09:45' },
@@ -67,11 +67,13 @@ function migrate(raw) {
   }));
   out.events = (out.events || []).map(ev => ({
     id: ev.id, title: ev.title, date: ev.date, time: ev.time || null, location: ev.location || null,
+    repeat: ev.repeat === 'weekly' || ev.repeat === 'daily' ? ev.repeat : null,
     reminders: ev.reminders || normReminders(ev.remindMinutes)
   }));
   for (const k of Object.keys(out.todos || {})) {
     out.todos[k] = (out.todos[k] || []).map(t => ({
       id: t.id, text: t.text, deadline: t.deadline != null ? t.deadline : null, done: !!t.done, createdAt: t.createdAt || 0,
+      repeat: t.repeat === 'weekly' || t.repeat === 'daily' ? t.repeat : null,
       reminders: t.reminders || normReminders(t.remindMinutes)
     }));
   }
@@ -216,6 +218,14 @@ function weekMatches(course, week) {
   if (week === null) return true;
   return course.weeks.includes(week);
 }
+// 重复规则：daily=每天、weekly=每周同日、null=仅当天
+// occursOn(item, 条目自身日期, 目标日期)：todo 条目无 date 字段，日期来自外层键
+function occursOn(item, fromDate, targetDate) {
+  const r = item && item.repeat;
+  if (r === 'daily') return true;
+  if (r === 'weekly' && fromDate && targetDate) return parseDateKey(fromDate).getDay() === parseDateKey(targetDate).getDay();
+  return fromDate === targetDate;
+}
 function notify(title, body) {
   if (!Notification.isSupported()) return;
   try { new Notification({ title, body, icon: ICON }).show(); } catch (e) {}
@@ -265,7 +275,7 @@ function checkReminders(force) {
       () => (c.name || '课程') + (c.location ? ' @ ' + c.location : '') + ' (' + p.start + '~' + p.end + ')');
   }
   for (const ev of data.events) {
-    if (ev.date !== todayKey || !ev.time) continue;
+    if (!occursOn(ev, ev.date, todayKey) || !ev.time) continue;
     const startMin = toMinutes(ev.time);
     fireReminders(nowMin, todayKey, 'e:' + ev.id, startMin, ev.reminders,
       { now: '活动开始', before: '活动提醒' },
@@ -279,12 +289,14 @@ function checkReminders(force) {
       { now: '考试开始', before: '考试提醒' },
       () => (cd.title || '考试') + (cd.location ? ' @ ' + cd.location : '') + ' (' + cd.time + ')');
   }
-  for (const t of (data.todos[todayKey] || [])) {
-    if (t.done || !t.deadline) continue;
-    const startMin = toMinutes(t.deadline);
-    fireReminders(nowMin, todayKey, 't:' + t.id, startMin, t.reminders,
-      { now: '截止时间到', before: '待办提醒' },
-      () => t.text + '（截止 ' + t.deadline + '）');
+  for (const [k, list] of Object.entries(data.todos || {})) {
+    for (const t of list || []) {
+      if (!occursOn(t, k, todayKey) || t.done || !t.deadline) continue;
+      const startMin = toMinutes(t.deadline);
+      fireReminders(nowMin, todayKey, 't:' + t.id, startMin, t.reminders,
+        { now: '截止时间到', before: '待办提醒' },
+        () => t.text + '（截止 ' + t.deadline + '）');
+    }
   }
   // 顺手清理旧 key（保留最近两天）
   if (notified.size > 4000) {
@@ -356,8 +368,11 @@ function todayPayload() {
     courses.push({ name: c.name, abbr: abbrMap[c.name] || c.name, start: p.start, end: p.end, location: c.location || null, period: c.period });
   }
   courses.sort((a, b) => a.period - b.period);
-  const todos = (data.todos[tk] || []).map(t => ({ text: t.text, deadline: t.deadline, done: !!t.done }));
-  const events = data.events.filter(e => e.date === tk).map(e => ({ title: e.title, time: e.time || null, location: e.location || null }));
+  const todos = [];
+  for (const [k, list] of Object.entries(data.todos || {})) {
+    for (const t of list || []) if (occursOn(t, k, tk)) todos.push({ text: t.text, deadline: t.deadline, done: !!t.done, repeat: t.repeat || null });
+  }
+  const events = data.events.filter(e => occursOn(e, e.date, tk)).map(e => ({ title: e.title, time: e.time || null, location: e.location || null, repeat: e.repeat || null }));
   const todayMid = new Date(now); todayMid.setHours(0, 0, 0, 0);
   const countdowns = (data.countdowns || [])
     .filter(c => c.date && c.date >= tk)
@@ -381,7 +396,7 @@ function schedulePayload() {
   courses.sort((a, b) => a.day - b.day || a.period - b.period);
   const todos = {};
   for (const [date, list] of Object.entries(data.todos || {})) {
-    todos[date] = (list || []).map(t => ({ id: t.id, text: t.text, deadline: t.deadline || null, done: !!t.done }));
+    todos[date] = (list || []).map(t => ({ id: t.id, text: t.text, deadline: t.deadline || null, done: !!t.done, repeat: t.repeat || null }));
   }
   return {
     date: tk,
@@ -390,7 +405,7 @@ function schedulePayload() {
     periods: (data.periods || []).map(p => ({ index: p.index, start: p.start, end: p.end })),
     courseAbbr: abbrMap,
     courses,
-    events: (data.events || []).map(e => ({ id: e.id, title: e.title, date: e.date, time: e.time || null, location: e.location || null })),
+    events: (data.events || []).map(e => ({ id: e.id, title: e.title, date: e.date, time: e.time || null, location: e.location || null, repeat: e.repeat || null })),
     countdowns: (data.countdowns || []).map(c => ({ id: c.id, title: c.title, date: c.date, time: c.time || null, location: c.location || null, color: c.color || null })),
     todos
   };
@@ -427,7 +442,8 @@ function handleMobileRequest(req, res) {
       const deadline = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(o.deadline || '')) ? String(o.deadline) : null;
       const points = Array.isArray(o.points) ? o.points.map(Number).filter(n => Number.isFinite(n) && n >= 0) : null;
       if (!data.todos[date]) data.todos[date] = [];
-      const todo = { id: Math.random().toString(36).slice(2, 10), text, deadline, done: false, createdAt: Date.now(), reminders: { points: (points && points.length) ? points : [10], repeat: null } };
+      const repeat = o.repeat === 'weekly' || o.repeat === 'daily' ? o.repeat : null;
+      const todo = { id: Math.random().toString(36).slice(2, 10), text, deadline, done: false, createdAt: Date.now(), repeat, reminders: { points: (points && points.length) ? points : [10], repeat: null } };
       data.todos[date].push(todo);
       saveData(); broadcastDataChanged();
       sendJson(res, 200, { ok: true, todo });
@@ -447,7 +463,8 @@ function handleMobileRequest(req, res) {
       const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(o.time || '')) ? String(o.time) : null;
       const location = String(o.location || '').trim() || null;
       const points = Array.isArray(o.points) ? o.points.map(Number).filter(n => Number.isFinite(n) && n >= 0) : null;
-      const ev = { id: Math.random().toString(36).slice(2, 10), title, date, time, location, createdAt: Date.now(), reminders: { points: (points && points.length) ? points : [10], repeat: null } };
+      const repeat = o.repeat === 'weekly' || o.repeat === 'daily' ? o.repeat : null;
+      const ev = { id: Math.random().toString(36).slice(2, 10), title, date, time, location, createdAt: Date.now(), repeat, reminders: { points: (points && points.length) ? points : [10], repeat: null } };
       data.events.push(ev);
       saveData(); broadcastDataChanged();
       sendJson(res, 200, { ok: true, event: ev });
@@ -538,12 +555,55 @@ function tickClickThrough() {
     lastIgnored = ignored;
     widgetWin.setIgnoreMouseEvents(ignored);
   }
+  tickFold();
 }
 ipcMain.handle('widget:setInteractiveAreas', (e, areas) => {
   interactiveAreas = Array.isArray(areas) ? areas : [];
   return true;
 });
 ipcMain.handle('widget:setDragActive', (e, on) => { forceInteractive = !!on; return true; });
+// ---------------- 挂件顶部自动折叠（QQ 式吸顶） ----------------
+const FOLD_W = 180, FOLD_H = 26;
+let folded = false;
+let peeked = false;
+let lastOverTime = Date.now();
+function foldWidget() {
+  if (!widgetWin || widgetWin.isDestroyed() || folded) return;
+  const wa = screen.getDisplayMatching(widgetWin.getBounds()).workArea;
+  const x = Math.round(wa.x + (wa.width - FOLD_W) / 2);
+  widgetWin.setBounds({ x, y: wa.y, width: FOLD_W, height: FOLD_H });
+  folded = true;
+  peeked = false;
+  try { widgetWin.webContents.send('widget:foldState', true); } catch (e) {}
+}
+function unfoldWidget() {
+  if (!widgetWin || widgetWin.isDestroyed() || !folded) return;
+  const s = data.settings;
+  const target = clampWidgetBounds({
+    x: s.widgetX != null ? s.widgetX : undefined,
+    y: s.widgetY != null ? s.widgetY : undefined,
+    width: s.widgetWidth || 900,
+    height: s.widgetHeight || 420
+  });
+  widgetWin.setBounds(target);
+  folded = false;
+  lastOverTime = Date.now();
+  try { widgetWin.webContents.send('widget:foldState', false); } catch (e) {}
+}
+function toggleFold() { if (folded) { peeked = false; unfoldWidget(); } else { peeked = false; lastOverTime = Date.now(); foldWidget(); } }
+function tickFold() {
+  if (!widgetWin || widgetWin.isDestroyed()) return;
+  if (forceInteractive) { lastOverTime = Date.now(); return; }
+  const b = widgetWin.getBounds();
+  const pt = screen.getCursorScreenPoint();
+  const over = pt.x >= b.x && pt.x <= b.x + b.width && pt.y >= b.y && pt.y <= b.y + b.height;
+  const now = Date.now();
+  if (folded) { if (over) { peeked = true; lastOverTime = now; unfoldWidget(); } return; }
+  if (peeked) { if (over) { lastOverTime = now; } else if (now - lastOverTime > 800) { peeked = false; foldWidget(); } return; }
+  if (over) lastOverTime = now;
+  else if (data.settings.autoFold && now - lastOverTime > 3000) foldWidget();
+}
+ipcMain.handle('widget:foldToggle', () => { toggleFold(); return folded; });
 // ---------------- 挂件边界管理 ----------------
 // 实测：Windows 非 100% 缩放（如 125%）下，setBounds 传入的 DIP 与 getBounds 读回值存在 ±1~2 的确定性偏差；
 // 若把"读回的膨胀值"当新目标写回，会形成自我放大循环（挂件每次拖拽变宽、最终飞走）。
