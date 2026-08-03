@@ -376,7 +376,7 @@ function schedulePayload() {
   for (const c of data.courses) {
     const p = data.periods.find(x => x.index === c.period);
     if (!p) continue;
-    courses.push({ id: c.id, name: c.name, abbr: abbrMap[c.name] || c.name, day: c.day, period: c.period, weeks: c.weeks || null, start: p.start, end: p.end, location: c.location || null });
+    courses.push({ id: c.id, name: c.name, abbr: abbrMap[c.name] || c.name, day: c.day, period: c.period, weeks: c.weeks || null, start: p.start, end: p.end, location: c.location || null, teacher: c.teacher || null });
   }
   courses.sort((a, b) => a.day - b.day || a.period - b.period);
   const todos = {};
@@ -431,6 +431,26 @@ function handleMobileRequest(req, res) {
       data.todos[date].push(todo);
       saveData(); broadcastDataChanged();
       sendJson(res, 200, { ok: true, todo });
+    });
+    return;
+  }
+  if (req.method === 'POST' && pathname === '/api/event') {
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 16384) req.destroy(); });
+    req.on('end', () => {
+      let o = null;
+      try { o = JSON.parse(body); } catch (e) { sendJson(res, 400, { error: 'bad json' }); return; }
+      const title = String(o.title || '').trim();
+      if (!title) { sendJson(res, 400, { error: 'title required' }); return; }
+      let date = String(o.date || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = dateKey(new Date());
+      const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(o.time || '')) ? String(o.time) : null;
+      const location = String(o.location || '').trim() || null;
+      const points = Array.isArray(o.points) ? o.points.map(Number).filter(n => Number.isFinite(n) && n >= 0) : null;
+      const ev = { id: Math.random().toString(36).slice(2, 10), title, date, time, location, createdAt: Date.now(), reminders: { points: (points && points.length) ? points : [10], repeat: null } };
+      data.events.push(ev);
+      saveData(); broadcastDataChanged();
+      sendJson(res, 200, { ok: true, event: ev });
     });
     return;
   }

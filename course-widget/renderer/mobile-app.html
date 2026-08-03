@@ -21,16 +21,33 @@ h1 { font-size: 18px; margin: 14px 2px 4px; }
 .item .txt { flex: 1; min-width: 0; }
 .item .loc { color: #7d86a3; font-size: 11px; }
 .todo.done { text-decoration: line-through; opacity: .5; }
-input { width: 100%; padding: 9px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #eef1f8; font-size: 14px; margin: 5px 0; }
-.row { display: flex; gap: 8px; } .row > * { flex: 1; }
-button.act { width: 100%; padding: 11px; border: none; border-radius: 10px; background: #4080ff; color: #fff; font-size: 15px; font-weight: 600; margin-top: 8px; cursor: pointer; }
+input { width: 100%; padding: 9px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #eef1f8; font-size: 14px; margin: 4px 0 8px; }
+.row { display: flex; gap: 8px; } .row > * { flex: 1; min-width: 0; }
+button.act { width: 100%; padding: 11px; border: none; border-radius: 10px; background: #4080ff; color: #fff; font-size: 15px; font-weight: 600; margin-top: 4px; cursor: pointer; }
 button.ghost { background: rgba(255,255,255,0.08); color: #cfe0ff; }
-#outbox { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(246,200,95,0.12); border: 1px solid rgba(246,200,95,0.35); color: #ffd76a; font-size: 12px; }
+button.mini { width: auto; padding: 4px 10px; border: none; border-radius: 8px; background: rgba(64,128,255,.25); color: #cfe0ff; font-size: 12px; cursor: pointer; flex: 0 0 auto; }
+button.mini.danger { background: rgba(242,139,130,.2); color: #f28b82; }
+.fld { font-size: 12px; color: #9fb0d6; margin: 6px 0 0; }
 .empty { color: #66708a; text-align: center; padding: 14px 0; font-size: 13px; }
 .hint { color: #7d86a3; font-size: 12px; line-height: 1.7; margin-top: 8px; }
-.dayhead { font-size: 13px; font-weight: 600; color: #ffd76a; margin: 12px 2px 4px; }
+.dayhead { font-size: 13px; font-weight: 600; color: #ffd76a; margin: 12px 2px 6px; }
+.weekhead { font-size: 14px; font-weight: 700; color: #cfe0ff; margin: 16px 2px 2px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.12); }
+.blk { background: rgba(64,128,255,0.12); border: 1px solid rgba(64,128,255,0.25); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; cursor: pointer; }
+.blk-row { display: flex; align-items: baseline; gap: 8px; }
+.blk-tm { color: #ffd76a; font-size: 13px; font-weight: 600; flex: 0 0 auto; }
+.blk-txt { color: #eef1f8; font-size: 14px; font-weight: 600; flex: 1; }
+.blk-per { color: #9fb0d6; font-size: 11px; flex: 0 0 auto; }
+.blk-loc { color: #7d86a3; font-size: 11px; margin-top: 2px; }
+.detail { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.15); }
+.det-line { font-size: 12px; color: #aab2c8; line-height: 1.8; }
 .set-label { font-size: 12px; color: #9fb0d6; margin: 10px 0 0; }
 #setStatus { font-size: 13px; margin-top: 10px; color: #9fb0d6; line-height: 1.8; }
+#outbox { margin-top: 6px; }
+.qhead { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #ffd76a; margin-bottom: 6px; }
+.qrow { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px dashed rgba(255,255,255,0.08); }
+.qtag { flex: 0 0 auto; font-size: 11px; color: #cfe0ff; background: rgba(64,128,255,.2); border-radius: 6px; padding: 1px 6px; }
+.qmain { flex: 1; min-width: 0; font-size: 13px; }
+.qsub { display: block; color: #7d86a3; font-size: 11px; }
 #flash { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); background: rgba(64,128,255,.92); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 9; white-space: nowrap; }
 #flash.show { opacity: 1; }
 </style>
@@ -59,15 +76,34 @@ button.ghost { background: rgba(255,255,255,0.08); color: #cfe0ff; }
 
 <div id="panelAdd" class="panel">
   <div class="card">
-    <h2>新增待办（先存手机，连上电脑后自动上传）</h2>
-    <input id="inText" placeholder="待办内容，如：交实验报告" autocomplete="off">
+    <h2>新增待办（先存手机，连上后自动上传）</h2>
+    <div class="fld">待办内容</div>
+    <input id="inText" placeholder="如：交实验报告" autocomplete="off">
     <div class="row">
-      <input id="inDate" type="date">
-      <input id="inTime" type="time" title="截止时间（可选）">
+      <div><div class="fld">日期</div><input id="inDate" type="date"></div>
+      <div><div class="fld">截止时间（可留空）</div><input id="inTime" type="time"></div>
     </div>
-    <input id="inPoints" type="number" min="0" value="10" title="提前多少分钟提醒（可选）">
-    <button class="act" id="btnSend" onclick="addTodo()">加入待办</button>
-    <div id="outbox" style="display:none"></div>
+    <div class="fld">提前提醒（分钟，留空默认 10）</div>
+    <input id="inPoints" type="number" min="0" value="10">
+    <button class="act" id="btnAddTodo" onclick="addTodo()">加入待办</button>
+  </div>
+  <div class="card">
+    <h2>新增临时活动（先存手机，连上后自动上传）</h2>
+    <div class="fld">活动内容</div>
+    <input id="evTitle" placeholder="如：社团例会 / 讲座" autocomplete="off">
+    <div class="row">
+      <div><div class="fld">日期</div><input id="evDate" type="date"></div>
+      <div><div class="fld">时间（可留空）</div><input id="evTime" type="time"></div>
+    </div>
+    <div class="fld">地点（可留空）</div>
+    <input id="evLoc" placeholder="如：综合楼 201" autocomplete="off">
+    <div class="fld">提前提醒（分钟，留空默认 10）</div>
+    <input id="evPoints" type="number" min="0" value="10">
+    <button class="act" id="btnAddEvent" onclick="addEvent()">加入活动</button>
+  </div>
+  <div class="card">
+    <h2>待上传队列（连不上时保留，可单个或一键上传）</h2>
+    <div id="outbox"></div>
   </div>
 </div>
 
@@ -81,17 +117,17 @@ button.ghost { background: rgba(255,255,255,0.08); color: #cfe0ff; }
     <button class="act" onclick="saveSettings()">保存设置</button>
     <div class="row" style="margin-top:12px">
       <button class="act ghost" onclick="doSync()">同步到手机</button>
-      <button class="act ghost" onclick="flushOutbox(true)">立即上传</button>
+      <button class="act ghost" onclick="uploadAll()">上传全部</button>
     </div>
     <div id="setStatus"></div>
   </div>
   <div class="card">
     <h2>说明</h2>
     <div class="hint">
-      · 「同步」把电脑上的课表/活动/倒数日/待办拉到手机；待办会与手机里未上传的合并去重。<br>
-      · 「上传」把手机里新增的待办发给电脑；连不上会保留队列，进 App 或点「立即上传」自动补发。<br>
+      · 「同步」把电脑上的课表/活动/倒数日/待办拉到手机；待办与活动会跟手机里未上传的合并去重。<br>
+      · 「加待办」页可新增<b>待办</b>和<b>临时活动</b>（活动可填时间/地点）；连不上时先进「待上传队列」，可单个或全部上传，进 App 也会自动补发。<br>
       · 樱花隧道强制 HTTPS：填 http:// 会自动转 https 重试；证书不受信时本 App 已放行（个人工具 + 随机令牌）。<br>
-      · 手机端只能新增待办，不能删除（上传后由电脑管理）。
+      · 手机端只能新增，不能删除电脑上的内容（上传后由电脑管理）。
     </div>
   </div>
 </div>
@@ -135,6 +171,7 @@ function goto(which) {
   for (var k in TAB_IDS) { var on = k === which; $(TAB_IDS[k][0]).classList.toggle('on', on); $(TAB_IDS[k][1]).classList.toggle('on', on); }
   if (which === 'today') renderToday();
   if (which === 'week') renderWeek();
+  if (which === 'add') { renderOutbox(); }
   if (which === 'settings') renderSettings();
 }
 function todayCourses(snap) {
@@ -158,18 +195,66 @@ function renderToday() {
   var cds = (snap.countdowns || []).filter(function(x){ return x.date && x.date >= tk; }).sort(function(a,b){ return a.date.localeCompare(b.date); }).slice(0, 3);
   cd.innerHTML = cds.length ? cds.map(function(x){ var days = Math.round((new Date(x.date) - new Date(tk)) / 86400000); return '<div class="item"><span class="tm">' + (days === 0 ? '就是今天' : '还有 ' + days + ' 天') + '</span><span class="txt">' + esc(x.title) + (x.time ? ' ' + esc(x.time) : '') + '</span>' + (x.location ? '<span class="loc"> ' + esc(x.location) + '</span>' : '') + '</div>'; }).join('') : '<div class="empty">暂无倒数日</div>';
 }
+function mergeDay(courses) {
+  var out = [], cur = null;
+  courses.forEach(function(c){
+    if (cur && cur.name === (c.name || '') && c.period === cur.endP + 1) {
+      cur.endP = c.period; cur.end = c.end; cur.items.push(c);
+      if (!cur.location && c.location) cur.location = c.location;
+    } else {
+      cur = { name: c.name || '', abbr: c.abbr || c.name || '', startP: c.period, endP: c.period, start: c.start, end: c.end, location: c.location || null, items: [c] };
+      out.push(cur);
+    }
+  });
+  return out;
+}
+function weeksLabel(c) {
+  if (!c.weeks || !c.weeks.length) return '每周';
+  var w = c.weeks.slice().sort(function(a,b){ return a - b; });
+  return w.length === 1 ? ('第' + w[0] + '周') : ('第' + w[0] + '-' + w[w.length-1] + '周');
+}
+function toggleDetail(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+}
 function renderWeek() {
   var snap = getSnap();
   var box = $('weekList');
   if (!snap || !snap.courses) { box.innerHTML = '<div class="empty">还没同步过课表：去「设置」填服务器地址并点同步</div>'; return; }
   var week = snap.weekNumber;
   var names = ['周一','周二','周三','周四','周五','周六','周日'];
-  var html = '<div class="hint">当前第 ' + (week ? week : '?') + ' 周（以最后一次同步为准）</div>';
-  for (var i = 1; i <= 7; i++) {
-    var cs = snap.courses.filter(function(c){ return c.day === i && weekOk(c, week); }).sort(function(a,b){ return a.period - b.period; });
-    html += '<div class="dayhead">' + names[i-1] + '</div>';
-    html += cs.length ? cs.map(function(c){ return '<div class="item"><span class="tm">' + esc(c.start) + '~' + esc(c.end) + '</span><span class="txt">' + esc(c.abbr || c.name) + '</span>' + (c.location ? '<span class="loc"> ' + esc(c.location) + '</span>' : '') + '</div>'; }).join('') : '<div class="empty">无课</div>';
-  }
+  var html = '';
+  var secs = [ { label: '本周', w: week }, { label: '下周', w: (week === null || week === undefined) ? null : week + 1 } ];
+  secs.forEach(function(sec, si){
+    html += '<div class="weekhead">' + sec.label + (sec.w ? ' · 第' + sec.w + '周' : '') + '</div>';
+    for (var i = 1; i <= 7; i++) {
+      var cs = snap.courses.filter(function(c){ return c.day === i && weekOk(c, sec.w); }).sort(function(a,b){ return a.period - b.period; });
+      html += '<div class="dayhead">' + names[i-1] + '</div>';
+      if (!cs.length) { html += '<div class="empty">无课</div>'; continue; }
+      var merged = mergeDay(cs);
+      html += merged.map(function(m, bi){
+        var id = 'wk' + si + 'd' + i + 'b' + bi;
+        var periodLabel = m.startP === m.endP ? ('第' + m.startP + '节') : ('第' + m.startP + '-' + m.endP + '节');
+        var det = m.items.map(function(it){
+          var lines = [];
+          lines.push('课程：' + esc(it.name || ''));
+          lines.push('节次：第' + it.period + '节 ' + esc(it.start) + '~' + esc(it.end));
+          lines.push('周次：' + esc(weeksLabel(it)));
+          if (it.location) lines.push('地点：' + esc(it.location));
+          if (it.teacher) lines.push('老师：' + esc(it.teacher));
+          return lines.map(function(x){ return '<div class="det-line">' + x + '</div>'; }).join('');
+        }).join('');
+        return '<div class="blk" onclick="toggleDetail(\'' + id + '\')">' +
+          '<div class="blk-row"><span class="blk-tm">' + esc(m.start) + '~' + esc(m.end) + '</span>' +
+          '<span class="blk-txt">' + esc(m.abbr) + '</span>' +
+          '<span class="blk-per">' + periodLabel + '</span></div>' +
+          (m.location ? '<div class="blk-loc">' + esc(m.location) + '</div>' : '') +
+          '<div class="detail" id="' + id + '">' + det + '</div>' +
+          '</div>';
+      }).join('');
+    }
+  });
   box.innerHTML = html;
 }
 function addTodo() {
@@ -178,7 +263,7 @@ function addTodo() {
   var date = $('inDate').value || todayStr();
   var deadline = $('inTime').value || null;
   var points = $('inPoints').value ? parseInt($('inPoints').value, 10) : 10;
-  var item = { text: text, date: date, deadline: deadline, points: points, createdAt: Date.now() };
+  var item = { type: 'todo', text: text, date: date, deadline: deadline, points: points, createdAt: Date.now() };
   var snap = getSnap();
   if (snap) {
     if (!snap.todos) snap.todos = {};
@@ -192,13 +277,67 @@ function addTodo() {
   flash('已加入待办（' + out.length + ' 条待上传）');
   flushOutbox();
 }
+function addEvent() {
+  var title = $('evTitle').value.trim();
+  if (!title) { alert('请输入活动内容'); return; }
+  var date = $('evDate').value || todayStr();
+  var time = $('evTime').value || null;
+  var location = $('evLoc').value.trim() || null;
+  var points = $('evPoints').value ? parseInt($('evPoints').value, 10) : 10;
+  var item = { type: 'event', title: title, date: date, time: time, location: location, points: points, createdAt: Date.now() };
+  var snap = getSnap();
+  if (snap) {
+    if (!snap.events) snap.events = [];
+    snap.events.push({ id: 'local-' + item.createdAt, title: title, date: date, time: time, location: location });
+    saveSnap(snap);
+  }
+  var out = getOutbox(); out.push(item); saveOutbox(out);
+  $('evTitle').value = ''; $('evTime').value = ''; $('evLoc').value = '';
+  renderOutbox();
+  flash('已加入活动（' + out.length + ' 条待上传）');
+  flushOutbox();
+}
 function renderOutbox() {
   var out = getOutbox();
   var box = $('outbox');
-  if (!out.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  box.style.display = '';
-  box.innerHTML = '待上传 ' + out.length + ' 条 · <a href="javascript:void(0)" onclick="flushOutbox(true)" style="color:#ffd76a">立即上传</a>';
+  if (!out.length) { box.innerHTML = '<div class="empty">暂无待上传</div>'; return; }
+  var rows = out.map(function(it){
+    var tag = it.type === 'event' ? '活动' : '待办';
+    var main = esc(it.type === 'event' ? it.title : it.text);
+    var sub = esc(it.date) + (it.type === 'event' ? (it.time ? ' ' + esc(it.time) : '') : (it.deadline ? ' ' + esc(it.deadline) : ''));
+    if (it.location) sub += ' ' + esc(it.location);
+    return '<div class="qrow"><span class="qtag">' + tag + '</span><span class="qmain">' + main + '<span class="qsub">' + sub + '</span></span>' +
+      '<button class="mini" onclick="uploadOne(' + it.createdAt + ')">上传</button>' +
+      '<button class="mini danger" onclick="removeOutbox(' + it.createdAt + ')">删</button></div>';
+  }).join('');
+  box.innerHTML = '<div class="qhead"><span>待上传 ' + out.length + ' 条</span><button class="mini" onclick="uploadAll()">全部上传</button></div>' + rows;
 }
+function sendOne(item) {
+  if (item.type === 'event') {
+    return apiFetch('/api/event', { method: 'POST', body: JSON.stringify({ title: item.title, date: item.date, time: item.time || null, location: item.location || null, points: [item.points || 10] }) });
+  }
+  return apiFetch('/api/todo', { method: 'POST', body: JSON.stringify({ text: item.text, date: item.date, deadline: item.deadline || null, points: [item.points || 10] }) });
+}
+function uploadOne(createdAt) {
+  var out = getOutbox();
+  var item = null;
+  out.forEach(function(x){ if (x.createdAt === createdAt) item = x; });
+  if (!item) return;
+  sendOne(item).then(function(r){
+    if (r.status === 401) { alert('令牌无效，请到「设置」检查令牌'); goto('settings'); return; }
+    if (r.ok) {
+      saveOutbox(getOutbox().filter(function(x){ return x.createdAt !== createdAt; }));
+      renderOutbox(); flash('已上传 1 条');
+    } else {
+      r.json().then(function(d){ alert('上传失败：' + (d.error || r.status)); }).catch(function(){ alert('上传失败：' + r.status); });
+    }
+  }).catch(function(){ flash('连接失败，已保留'); });
+}
+function removeOutbox(createdAt) {
+  saveOutbox(getOutbox().filter(function(x){ return x.createdAt !== createdAt; }));
+  renderOutbox();
+}
+function uploadAll() { flushOutbox(true); }
 function flushOutbox(manual) {
   var out = getOutbox();
   if (!out.length) { renderOutbox(); if (manual) flash('没有待上传的内容'); return; }
@@ -208,7 +347,7 @@ function flushOutbox(manual) {
   var chain = Promise.resolve();
   out.forEach(function(item){
     chain = chain.then(function(){
-      return apiFetch('/api/todo', { method: 'POST', body: JSON.stringify({ text: item.text, date: item.date, deadline: item.deadline || null, points: [item.points || 10] }) }).then(function(r){
+      return sendOne(item).then(function(r){
         if (r.status === 401) { authErr = true; return; }
         if (r.ok) okIds[item.createdAt] = true;
       }).catch(function(){});
@@ -236,10 +375,16 @@ function doSync() {
     var out = getOutbox();
     if (out.length) {
       if (!d.todos) d.todos = {};
+      if (!d.events) d.events = [];
       out.forEach(function(item){
-        var arr = d.todos[item.date] || (d.todos[item.date] = []);
-        var dup = arr.some(function(t){ return t.text === item.text && (t.deadline || null) === (item.deadline || null); });
-        if (!dup) arr.push({ id: 'local-' + item.createdAt, text: item.text, deadline: item.deadline || null, done: false });
+        if (item.type === 'event') {
+          var dupE = d.events.some(function(e){ return e.title === item.title && e.date === item.date && (e.time || null) === (item.time || null); });
+          if (!dupE) d.events.push({ id: 'local-' + item.createdAt, title: item.title, date: item.date, time: item.time || null, location: item.location || null });
+        } else {
+          var arr = d.todos[item.date] || (d.todos[item.date] = []);
+          var dup = arr.some(function(t){ return t.text === item.text && (t.deadline || null) === (item.deadline || null); });
+          if (!dup) arr.push({ id: 'local-' + item.createdAt, text: item.text, deadline: item.deadline || null, done: false });
+        }
       });
     }
     saveSnap(d);
@@ -274,6 +419,7 @@ function renderSettings() {
 }
 function boot() {
   $('inDate').value = todayStr();
+  $('evDate').value = todayStr();
   renderToday(); renderWeek(); renderOutbox(); renderSettings();
   goto('today');
   flushOutbox();
