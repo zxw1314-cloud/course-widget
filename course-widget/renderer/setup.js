@@ -417,6 +417,8 @@ function renderSettings() {
   $('setAutostart').checked = !!data.settings.autostart;
   $('setShowCountdown').checked = !!data.settings.showCountdown;
   $('setAutoFold').checked = !!data.settings.autoFold;
+  $('setWidgetOnTop').checked = !!data.settings.widgetOnTop;
+  $('setFoldGrace').value = data.settings.foldGraceMs != null ? data.settings.foldGraceMs : 1500;
   $('setBell').checked = !!data.settings.bellEnabled;
   $('setMobileBridge').checked = !!data.settings.mobileBridgeEnabled;
   $('setMobileMode').value = data.settings.mobileBridgeMode || 'both';
@@ -454,6 +456,8 @@ $('setWeekStrip').addEventListener('change', (e) => { data.settings.showWeekStri
 $('setAutostart').addEventListener('change', async (e) => { data.settings.autostart = e.target.checked; await window.api.setAutostart(e.target.checked); });
 $('setShowCountdown').addEventListener('change', (e) => { data.settings.showCountdown = e.target.checked; markDirty(); });
 $('setAutoFold').addEventListener('change', (e) => { data.settings.autoFold = e.target.checked; markDirty(); });
+$('setWidgetOnTop').addEventListener('change', (e) => { data.settings.widgetOnTop = e.target.checked; markDirty(); });
+$('setFoldGrace').addEventListener('change', (e) => { data.settings.foldGraceMs = Math.max(0, parseInt(e.target.value, 10) || 0); markDirty(); });
 $('setMobileBridge').addEventListener('change', (e) => {
   data.settings.mobileBridgeEnabled = e.target.checked; markDirty(); refreshMobileInfo();
 });

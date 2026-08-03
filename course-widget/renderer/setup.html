@@ -87,17 +87,17 @@ hr { border: none; border-top: 1px dashed #e3e6ef; margin: 10px 0; }
       <table class="grid" id="courseGrid"></table>
     </div>
     <div class="card">
-      <h3>课程简写（挂件显示用；AI 提取的是全称，这里配好简写后挂件只显示简写，留空=显示全称）</h3>
+      <h3>课程简写（挂件显示用；AI 提取的是全称（其实这家伙自己就会帮你想好简称，虽然想的简称是一坨），这里配好简写后挂件只显示简写，留空=显示全称）</h3>
       <div id="abbrList"></div>
     </div>
     <div class="card">
-      <h3>从 JSON 导入课表（多模态 AI 提取）</h3>
+      <h3>从 JSON 导入课表（多模态 AI 提取，比如豆包，别用DeepSeek就是了(万一ds以后有多模态呢，嘶……)）</h3>
       <div class="row">
         <button class="ghost" id="btnJsonImport">打开导入面板</button>
         <button class="ghost" id="btnJsonExport">导出当前课表 JSON</button>
         <button class="ghost" id="btnJsonPrompt">复制 AI 提取提示词</button>
       </div>
-      <p style="color:#9aa1b2;font-size:12px;margin-top:8px">把课表截图交给 AI（用右侧提示词），得到 JSON 后粘贴进导入面板即可生成课表；也支持"导出当前课表 JSON"后让 AI 修改再导回。</p>
+      <p style="color:#9aa1b2;font-size:12px;margin-top:8px">把课表截图交给 AI（用右侧提示词），得到 JSON 后粘贴进导入面板即可生成课表（这功能是真超模吧！(自豪)）；也支持"导出当前课表 JSON"后让 AI 修改再导回（我觉得应该用不上，但还是留着吧）。</p>
     </div>
   </section>
   <section id="tab-events" class="hidden">
@@ -167,13 +167,15 @@ hr { border: none; border-top: 1px dashed #e3e6ef; margin: 10px 0; }
         <button id="btnSnapBR" type="button">贴到右下角</button>
         <button id="btnSnapTR" type="button">贴到右上角</button>
       </label>
-      <label><input id="setCompact" type="checkbox"> 挂件紧凑模式（历史保留项，当前版本不生效）</label>
-      <label><input id="setMerge" type="checkbox"> 合并连堂课程（挂件把连续的同名课合成一个大框，显示起止时间）</label>
-      <label><input id="setWeekStrip" type="checkbox"> 挂件显示本周日期条（历史保留项，当前版本不生效）</label>
-      <p style="color:#9aa1b2;font-size:12px;margin:0">以上两个勾选为旧版遗留选项，勾不勾都不影响显示；保留是为了避免你以为功能丢了（能跑就不修了）。</p>
-      <label><input id="setAutostart" type="checkbox"> 开机自启</label>
-      <label><input id="setShowCountdown" type="checkbox"> 挂件显示倒数日</label>
+      <label><input id="setCompact" type="checkbox"> 挂件紧凑模式（历史保留项，不生效）</label>
+      <label><input id="setMerge" type="checkbox"> 合并连堂课程（挂件把连续的同名课合成一个大框，显示起止时间，建议开启）</label>
+      <label><input id="setWeekStrip" type="checkbox"> 挂件显示本周日期条（历史保留项，不生效）</label>
+      <p style="color:#9aa1b2;font-size:12px;margin:0">以上两个勾选为旧版遗留选项，勾不勾都不影响显示，而且最好别勾（能跑就不修了）。</p>
+      <label><input id="setAutostart" type="checkbox"> 开机自启（没测过，懒得重启）</label>
+      <label><input id="setShowCountdown" type="checkbox"> 挂件显示倒数日（为什么这玩意也要加一个设置项啊，开着吧，不影响）</label>
       <label><input id="setAutoFold" type="checkbox"> 挂件自动折叠到屏幕顶部（鼠标移到顶部自动展开，离开 3 秒折回）</label>
+      <label><input id="setWidgetOnTop" type="checkbox"> 挂件置顶显示（会盖住其他窗口，折叠条同样置顶）(建议和上面那玩意一起开(不过其实我建议都关掉))</label>
+      <label>展开后交互缓冲（毫秒，0=立即交互……好像没用）<input id="setFoldGrace" type="number" min="0" step="100" value="1500" style="width:90px"></label>
       <hr>
       <h3>📱 手机连接（局域网 / 樱花frp，保存后生效）</h3>
       <label><input id="setMobileBridge" type="checkbox"> 允许手机/远程连接（电脑开一个 HTTP 端口：App 可同步课表、上传待办/临时活动/倒数日，网页可查看今日/添加待办）</label>
@@ -188,10 +190,10 @@ hr { border: none; border-top: 1px dashed #e3e6ef; margin: 10px 0; }
           <button class="ghost small" id="btnCopyToken" type="button">复制</button>
           <button class="ghost small" id="btnRegenToken" type="button">重新生成</button>
         </div>
-        <p style="margin-top:4px">手机连同一 Wi-Fi 直接访问本地地址；出门用樱花frp 把本机 <code>8723</code> 端口映射到公网（隧道需开"自动 HTTPS"，樱花frp 会帮你终止 TLS，本地服务不用改）。<b>新版 Android App</b> 为本地课表模式：在 App「设置」里填服务器地址（樱花隧道用 <code>https://</code>）+ 令牌，可手动「同步到手机 / 立即上传」，断网也能看本地课表；网页/PWA 版照旧在线查看+新增待办。改完记得点「保存」。</p>
+        <p style="margin-top:4px">手机连同一 Wi-Fi 直接访问本地地址；出门用樱花frp 把本机 <code>8723</code> 端口映射到公网（隧道需开"自动 HTTPS"，樱花frp 会帮你终止 TLS，本地服务不用改）。<b>新版 Android App</b> 为本地课表模式：在 App「设置」里填服务器地址（樱花隧道用 <code>https://</code>）+ 令牌，可手动「同步到手机 / 立即上传」，断网也能看本地课表；网页/PWA 版照旧在线查看+新增待办。改完记得点「保存」（我怎么感觉「保存」好像被我删了）。</p>
       </div>
       <hr>
-      <h3>提醒声音（弹系统通知时同时播放提示音，防止错过）</h3>
+      <h3>提醒声音（弹系统通知时同时播放提示音，防止错过，这功能没专门测过，不过说实话，冷不丁来这么一下确实挺吓人的）</h3>
       <label><input id="setBell" type="checkbox"> 弹通知时播放提示音</label>
       <label>提示音 <select id="setBellPreset" style="width:180px"></select>
         <button class="ghost small" id="btnTestBell">试听</button>
@@ -203,6 +205,23 @@ hr { border: none; border-top: 1px dashed #e3e6ef; margin: 10px 0; }
         <button class="ghost" id="btnExport">导出备份</button>
         <button class="ghost" id="btnImport">导入备份</button>
       </div>
+      <hr>
+      <h3>作者想说
+        <p style="color:#9aa1b2;font-size:12px;margin:4px 0 0">
+          闲着没事做的一个小软件，因为怕自己总是忘事，又没找着好用的软件，所以我干脆自己写了一个，大部分(几乎全部)代码都是AI(DeepSeek-V4-flash正式版)写的，本着能用就行并且足够方便(对我来说)还免费的态度，我算是把这一坨程序给憋出来了。
+        </p>
+        <p style="color:#9aa1b2;font-size:12px;margin:4px 0 0">
+          这玩意支持手机端与电脑端互通，不过前提是电脑一直开着(其实关了也没关系，手机端会一直保留没推送上去的信息)，也挺符合我这种在外面收到通知回到宿舍就忘还不怎么打开微信看的"人类"(存疑)的需求。
+        </p>
+        <p style="color:#9aa1b2;font-size:12px;margin:4px 0 0">
+          本人不怎么会编程，这些代码全是AI帮我写的，我只管提需求提bug就行了，以至于我现在项目写完了还没打开过一次VScode(除了这次)，
+          我是完全不理解代码里面写了什么，也不能够进行维护，所以……出事儿别找我喵(其实一般也不会出事，这么小个项目我就不信还能有高危的网安问题不成？)，而且反正这玩意开源了，把仓库克隆下来自己去改嘛……
+        </p>
+        <p style="color:#9aa1b2;font-size:12px;margin:4px 0 0">
+          这一波写下来唯一的感觉就是：AI太nb了(我们两个真厉害)，我全程只需要点允许允许允许顺便提点需求，从开始到现在也就花了3亿多tokens，二十多块钱，如果是厉害一点的程序员的话应该会更低(不过人家没那么闲)
+        </p>
+        <h3>声明
+          
       <p class="toast" id="toast"></p>
     </div>
   </section>

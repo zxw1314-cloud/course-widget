@@ -40,7 +40,7 @@ function defaultData() {
       mergeConsecutive: true, // 挂件把同一课程连续节次合并成一个大框（显示起止时间）
       mobileBridgeEnabled: false, mobileBridgeMode: 'both', mobileToken: null, // 手机远程桥（局域网/樱花frp）
       widgetWidth: 900, widgetHeight: null, widgetX: null, widgetY: null, widgetCorner: 'bottomRight',
-      bellEnabled: false, bellVolume: 0.8, bellPreset: 'school-bell', showCountdown: true, autoFold: false
+      bellEnabled: false, bellVolume: 0.8, bellPreset: 'school-bell', showCountdown: true, autoFold: false, widgetOnTop: false, foldGraceMs: 1500
     },
     periods: [
       { index: 1, start: '08:00', end: '08:45' }, { index: 2, start: '09:00', end: '09:45' },
@@ -144,7 +144,7 @@ function createWidgetWindow() {
   widgetWin = new BrowserWindow({
     width: w, height: h, x: pos.x, y: pos.y,
     show: false, frame: false, transparent: true, resizable: false, focusable: false, skipTaskbar: true, minWidth: 100, minHeight: 100,
-    alwaysOnTop: false, hasShadow: false, backgroundColor: '#00000000',
+    alwaysOnTop: !!data.settings.widgetOnTop, hasShadow: false, backgroundColor: '#00000000',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
   widgetWin.loadFile(path.join(__dirname, 'renderer', 'widget.html'));
@@ -490,6 +490,23 @@ function handleMobileRequest(req, res) {
     });
     return;
   }
+  if (req.method === 'POST' && pathname === '/api/todo/done') {
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 16384) req.destroy(); });
+    req.on('end', () => {
+      let o = null;
+      try { o = JSON.parse(body); } catch (e) { sendJson(res, 400, { error: 'bad json' }); return; }
+      const date = String(o.date || '');
+      const id = String(o.id || '');
+      const list = data.todos[date];
+      const t2 = Array.isArray(list) ? list.find(x => x.id === id) : null;
+      if (!t2) { sendJson(res, 404, { error: 'todo not found' }); return; }
+      t2.done = !!o.done;
+      saveData(); broadcastDataChanged();
+      sendJson(res, 200, { ok: true, done: !!o.done });
+    });
+    return;
+  }
   sendJson(res, 404, { error: 'not found' });
 }
 function startMobileServer() {
@@ -515,6 +532,7 @@ ipcMain.handle('data:set', (e, next) => {
     data = migrate(Object.assign(defaultData(), next, { settings: Object.assign(defaultData().settings, next.settings || {}) }));
     if (data.settings.autostart !== app.getLoginItemSettings().openAtLogin) setAutostart(data.settings.autostart);
     saveData(); rebuildTrayMenu(); broadcastDataChanged(); syncMobileServer();
+    if (widgetWin && !widgetWin.isDestroyed()) widgetWin.setAlwaysOnTop(!!data.settings.widgetOnTop);
   }
   return true;
 });
@@ -561,17 +579,21 @@ ipcMain.handle('widget:setInteractiveAreas', (e, areas) => {
   interactiveAreas = Array.isArray(areas) ? areas : [];
   return true;
 });
-ipcMain.handle('widget:setDragActive', (e, on) => { forceInteractive = !!on; return true; });
+ipcMain.handle('widget:setDragActive', (e, on) => { dragActive = !!on; forceInteractive = !!on; return true; });
 // ---------------- 挂件顶部自动折叠（QQ 式吸顶） ----------------
 const FOLD_W = 180, FOLD_H = 26;
 let folded = false;
 let peeked = false;
 let lastOverTime = Date.now();
+let dragActive = false;
+let foldGraceTimer = null;
 function foldWidget() {
   if (!widgetWin || widgetWin.isDestroyed() || folded) return;
-  const wa = screen.getDisplayMatching(widgetWin.getBounds()).workArea;
-  const x = Math.round(wa.x + (wa.width - FOLD_W) / 2);
-  widgetWin.setBounds({ x, y: wa.y, width: FOLD_W, height: FOLD_H });
+  const b = widgetWin.getBounds();
+  const wa = screen.getDisplayMatching(b).workArea;
+  const centerX = Math.round(b.x + b.width / 2);
+  const sx = Math.min(Math.max(centerX, wa.x + Math.round(FOLD_W / 2)), wa.x + wa.width - Math.round(FOLD_W / 2));
+  widgetWin.setBounds({ x: Math.round(sx - FOLD_W / 2), y: wa.y, width: FOLD_W, height: FOLD_H });
   folded = true;
   peeked = false;
   try { widgetWin.webContents.send('widget:foldState', true); } catch (e) {}
@@ -579,21 +601,35 @@ function foldWidget() {
 function unfoldWidget() {
   if (!widgetWin || widgetWin.isDestroyed() || !folded) return;
   const s = data.settings;
-  const target = clampWidgetBounds({
-    x: s.widgetX != null ? s.widgetX : undefined,
-    y: s.widgetY != null ? s.widgetY : undefined,
-    width: s.widgetWidth || 900,
-    height: s.widgetHeight || 420
-  });
+  const w = s.widgetWidth || 900, h = s.widgetHeight || 420;
+  // 顶着折叠条展开：条在屏幕顶边且对齐挂件水平中心，展开后鼠标仍在窗口内（不抽搐）
+  const b = widgetWin.getBounds();
+  const wa = screen.getDisplayMatching(b).workArea;
+  const stripCenter = Math.round(b.x + b.width / 2);
+  let x = Math.round(stripCenter - w / 2);
+  x = Math.min(Math.max(x, wa.x), wa.x + wa.width - w);
+  const target = clampWidgetBounds({ x, y: wa.y, width: w, height: h });
   widgetWin.setBounds(target);
   folded = false;
   lastOverTime = Date.now();
   try { widgetWin.webContents.send('widget:foldState', false); } catch (e) {}
+  // 展开后短暂全交互缓冲（默认1.5s，可配置，0=关闭）：刚展开即可点击/拖动/设置，不会"点不动"
+  const grace = data.settings.foldGraceMs != null ? data.settings.foldGraceMs : 1500;
+  if (grace > 0) {
+    forceInteractive = true;
+    clearTimeout(foldGraceTimer);
+    foldGraceTimer = setTimeout(() => { if (!dragActive) forceInteractive = false; }, grace);
+  }
 }
 function toggleFold() { if (folded) { peeked = false; unfoldWidget(); } else { peeked = false; lastOverTime = Date.now(); foldWidget(); } }
 function tickFold() {
   if (!widgetWin || widgetWin.isDestroyed()) return;
   if (forceInteractive) { lastOverTime = Date.now(); return; }
+  // 关闭自动折叠时立即恢复展开（否则折叠/peek 状态会一直折回，看起来"关不掉"）
+  if (!data.settings.autoFold) {
+    if (folded || peeked) { peeked = false; if (folded) unfoldWidget(); else lastOverTime = Date.now(); }
+    return;
+  }
   const b = widgetWin.getBounds();
   const pt = screen.getCursorScreenPoint();
   const over = pt.x >= b.x && pt.x <= b.x + b.width && pt.y >= b.y && pt.y <= b.y + b.height;
@@ -700,6 +736,7 @@ ipcMain.handle('data:import', async () => {
     if (parsed && typeof parsed === 'object') {
       data = migrate(Object.assign(defaultData(), parsed, { settings: Object.assign(defaultData().settings, parsed.settings || {}) }));
       saveData(); rebuildTrayMenu(); broadcastDataChanged(); syncMobileServer();
+      if (widgetWin && !widgetWin.isDestroyed()) widgetWin.setAlwaysOnTop(!!data.settings.widgetOnTop);
       return { ok: true, path: r.filePaths[0] };
     }
     return { ok: false, error: '文件格式不正确' };

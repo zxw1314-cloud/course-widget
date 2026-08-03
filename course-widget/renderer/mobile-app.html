@@ -55,7 +55,7 @@ textarea { width: 100%; min-height: 110px; padding: 9px; border-radius: 8px; bor
 </style>
 </head>
 <body>
-<h1>桌面课表<span class="mode-tag">本地版</span></h1>
+<h1>桌面课表<span class="mode-tag" id="verTag">本地版</span></h1>
 <div class="sub">课表存在手机本机 · 连上电脑后手动同步/上传</div>
 
 <div class="tabs">
@@ -170,6 +170,7 @@ textarea { width: 100%; min-height: 110px; padding: 9px; border-radius: 8px; bor
 var SERVER_KEY = 'cw_server';
 var SNAP_KEY = 'cw_schedule';
 var OUTBOX_KEY = 'cw_outbox';
+var APP_VERSION = '0.3.0';
 function $(id) { return document.getElementById(id); }
 function todayStr() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
@@ -221,8 +222,8 @@ function renderToday() {
   list.innerHTML = cs.length ? cs.map(function(c){ return '<div class="item"><span class="tm">' + esc(c.start) + '</span><span class="txt">' + esc(c.abbr || c.name) + '</span>' + (c.location ? '<span class="loc"> ' + esc(c.location) + '</span>' : '') + '</div>'; }).join('') : '<div class="empty">今天没课</div>';
   var tk = todayStr();
   var todos = [];
-  for (var dk in (snap.todos || {})) { (snap.todos[dk] || []).forEach(function(x){ if (occursOn(x, dk, tk)) todos.push(x); }); }
-  t.innerHTML = todos.length ? todos.map(function(x){ return '<div class="item todo' + (x.done ? ' done' : '') + '"><span class="tm">' + (x.deadline ? esc(x.deadline) : '') + '</span><span class="txt">' + esc(x.text) + (x.repeat === 'weekly' ? ' [每周]' : (x.repeat === 'daily' ? ' [每天]' : '')) + '</span></div>'; }).join('') : '<div class="empty">暂无待办</div>';
+  for (var dk in (snap.todos || {})) { (snap.todos[dk] || []).forEach(function(x){ if (occursOn(x, dk, tk)) todos.push({ k: dk, x: x }); }); }
+  t.innerHTML = todos.length ? todos.map(function(o){ return '<div class="item todo' + (o.x.done ? ' done' : '') + '"><input type="checkbox" style="width:auto" ' + (o.x.done ? 'checked' : '') + ' onclick="toggleTodoDone(\'' + o.k + '\',\'' + o.x.id + '\',this.checked)"><span class="tm">' + (o.x.deadline ? esc(o.x.deadline) : '') + '</span><span class="txt">' + esc(o.x.text) + (o.x.repeat === 'weekly' ? ' [每周]' : (o.x.repeat === 'daily' ? ' [每天]' : '')) + '</span></div>'; }).join('') : '<div class="empty">暂无待办</div>';
   var evs = (snap.events || []).filter(function(x){ return occursOn(x, x.date, tk); });
   e.innerHTML = evs.length ? evs.map(function(x){ return '<div class="item"><span class="tm">' + (x.time ? esc(x.time) : '全天') + '</span><span class="txt">' + esc(x.title) + (x.repeat === 'weekly' ? ' [每周]' : (x.repeat === 'daily' ? ' [每天]' : '')) + '</span>' + (x.location ? '<span class="loc"> ' + esc(x.location) + '</span>' : '') + '</div>'; }).join('') : '<div class="empty">暂无活动</div>';
   var cds = (snap.countdowns || []).filter(function(x){ return x.date && x.date >= tk; }).sort(function(a,b){ return a.date.localeCompare(b.date); }).slice(0, 3);
@@ -251,6 +252,30 @@ function toggleDetail(id) {
   if (!el) return;
   el.style.display = (el.style.display === 'block') ? 'none' : 'block';
 }
+function dateAdd(key, days) {
+  var d = new Date(key + 'T00:00:00'); d.setDate(d.getDate() + days);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function mondayOf(key) {
+  var d = new Date(key + 'T00:00:00');
+  var wd = (d.getDay() + 6) % 7;
+  return dateAdd(key, -wd);
+}
+function toggleTodoDone(date, id, done) {
+  var snap = getSnap();
+  var changed = false;
+  if (snap && snap.todos && snap.todos[date]) {
+    snap.todos[date].forEach(function(x){ if (x.id === id) { x.done = !!done; changed = true; } });
+    if (changed) { saveSnap(snap); renderToday(); renderWeek(); }
+  }
+  apiFetch('/api/todo/done', { method: 'POST', body: JSON.stringify({ date: date, id: id, done: !!done }) }).then(function(r){
+    if (r.ok) return;
+    if (r.status === 404) flash('电脑上没找到这条待办（可能还没上传或已被删除）');
+    else flash('同步失败（HTTP ' + r.status + '），已保留本地勾选');
+  }).catch(function(){
+    flash('离线：已本地勾选，连上电脑同步后生效');
+  });
+}
 function renderWeek() {
   var snap = getSnap();
   var box = $('weekList');
@@ -261,48 +286,65 @@ function renderWeek() {
   var secs = [ { label: '本周', w: week }, { label: '下周', w: (week === null || week === undefined) ? null : week + 1 } ];
   secs.forEach(function(sec, si){
     html += '<div class="weekhead">' + sec.label + (sec.w ? ' · 第' + sec.w + '周' : '') + '</div>';
+    var monday = mondayOf(snap.date || todayStr());
+    if (si === 1) monday = dateAdd(monday, 7);
     for (var i = 1; i <= 7; i++) {
+      var dk = dateAdd(monday, i - 1);
       var cs = snap.courses.filter(function(c){ return c.day === i && weekOk(c, sec.w); }).sort(function(a,b){ return a.period - b.period; });
       html += '<div class="dayhead">' + names[i-1] + '</div>';
-      if (!cs.length) { html += '<div class="empty">无课</div>'; continue; }
-      var merged = mergeDay(cs);
-      html += merged.map(function(m, bi){
-        var id = 'wk' + si + 'd' + i + 'b' + bi;
-        var periodLabel = m.startP === m.endP ? ('第' + m.startP + '节') : ('第' + m.startP + '-' + m.endP + '节');
-        var det = m.items.map(function(it){
-          var lines = [];
-          lines.push('课程：' + esc(it.name || ''));
-          lines.push('节次：第' + it.period + '节 ' + esc(it.start) + '~' + esc(it.end));
-          lines.push('周次：' + esc(weeksLabel(it)));
-          if (it.location) lines.push('地点：' + esc(it.location));
-          if (it.teacher) lines.push('老师：' + esc(it.teacher));
-          return lines.map(function(x){ return '<div class="det-line">' + x + '</div>'; }).join('');
+      if (!cs.length) html += '<div class="empty">无课</div>';
+      else {
+        var merged = mergeDay(cs);
+        html += merged.map(function(m, bi){
+          var id = 'wk' + si + 'd' + i + 'b' + bi;
+          var periodLabel = m.startP === m.endP ? ('第' + m.startP + '节') : ('第' + m.startP + '-' + m.endP + '节');
+          var det = m.items.map(function(it){
+            var lines = [];
+            lines.push('课程：' + esc(it.name || ''));
+            lines.push('节次：第' + it.period + '节 ' + esc(it.start) + '~' + esc(it.end));
+            lines.push('周次：' + esc(weeksLabel(it)));
+            if (it.location) lines.push('地点：' + esc(it.location));
+            if (it.teacher) lines.push('老师：' + esc(it.teacher));
+            return lines.map(function(x){ return '<div class="det-line">' + x + '</div>'; }).join('');
+          }).join('');
+          return '<div class="blk" onclick="toggleDetail(\'' + id + '\')">' +
+            '<div class="blk-row"><span class="blk-tm">' + esc(m.start) + '~' + esc(m.end) + '</span>' +
+            '<span class="blk-txt">' + esc(m.abbr) + '</span>' +
+            '<span class="blk-per">' + periodLabel + '</span></div>' +
+            (m.location ? '<div class="blk-loc">' + esc(m.location) + '</div>' : '') +
+            '<div class="detail" id="' + id + '">' + det + '</div>' +
+            '</div>';
         }).join('');
-        return '<div class="blk" onclick="toggleDetail(\'' + id + '\')">' +
-          '<div class="blk-row"><span class="blk-tm">' + esc(m.start) + '~' + esc(m.end) + '</span>' +
-          '<span class="blk-txt">' + esc(m.abbr) + '</span>' +
-          '<span class="blk-per">' + periodLabel + '</span></div>' +
-          (m.location ? '<div class="blk-loc">' + esc(m.location) + '</div>' : '') +
-          '<div class="detail" id="' + id + '">' + det + '</div>' +
-          '</div>';
-      }).join('');
+      }
+      var evs = (snap.events || []).filter(function(x){ return occursOn(x, x.date, dk); }).sort(function(a,b){ return (a.time || '').localeCompare(b.time || ''); });
+      if (evs.length) {
+        html += evs.map(function(x){ return '<div class="item"><span class="tm">' + (x.time ? esc(x.time) : '全天') + '</span><span class="txt">' + esc(x.title) + (x.repeat === 'weekly' ? ' [每周]' : (x.repeat === 'daily' ? ' [每天]' : '')) + '</span>' + (x.location ? '<span class="loc"> ' + esc(x.location) + '</span>' : '') + '</div>'; }).join('');
+      }
+      var tds = [];
+      for (var tdk in (snap.todos || {})) { (snap.todos[tdk] || []).forEach(function(x){ if (occursOn(x, tdk, dk)) tds.push({ k: tdk, x: x }); }); }
+      if (tds.length) {
+        html += tds.map(function(o){ return '<div class="item todo' + (o.x.done ? ' done' : '') + '"><input type="checkbox" style="width:auto" ' + (o.x.done ? 'checked' : '') + ' onclick="toggleTodoDone(\'' + o.k + '\',\'' + o.x.id + '\',this.checked)"><span class="tm">' + (o.x.deadline ? esc(o.x.deadline) : '') + '</span><span class="txt">' + esc(o.x.text) + (o.x.repeat === 'weekly' ? ' [每周]' : (o.x.repeat === 'daily' ? ' [每天]' : '')) + '</span></div>'; }).join('');
+      }
     }
   });
   box.innerHTML = html;
 }
 var PROMPT_TEXT = '你是日程提取助手。用户会给你 1~5 张截图（微信群通知/作业通知/聊天记录等）。请提取其中的待办、临时活动和倒数日，只输出一个 JSON 对象，不要任何解释、代码块标记或多余文字。\n\nJSON 格式：\n{\n  "todos": [ { "text": "待办内容", "date": "YYYY-MM-DD", "deadline": "HH:MM", "points": 10 } ],\n  "events": [ { "title": "活动名称", "date": "YYYY-MM-DD", "time": "HH:MM", "location": "地点", "points": 10 } ],\n  "countdowns": [ { "title": "倒数日名称", "date": "YYYY-MM-DD", "time": "HH:MM", "color": "#ff5a5a" } ]\n}\n\n规则：\n1. 有明确截止时间的任务/作业/提交 → todos；date 填截止日期，deadline 填截止时间。\n2. 有明确开始时间和地点的会议/年级会/讲座/活动 → events。\n3. 只有日期没有具体开始时间、需要倒计时的事件（考试/系统关闭/纪念日）→ countdowns；同一条通知可拆出多条。\n4. 时间解析：以截图里最新一条消息的日期为基准推算"明天=+1天"、"本周日/本周三=最近的相应星期"；"晚上24:00/24点"→当天 23:59；"十二点半"→12:30；"下午三点"→15:00；"晚上7点"→19:00。\n5. 地点如有"改为/最新通知"的更新，取最新地点。\n6. 年份缺失用当前年份；实在无法确定日期的，date 字段省略（导入后默认今天）。\n7. 不确定的字段就省略（如无时间就不写 deadline/time），points 默认 10（提前提醒分钟）。\n8. 涉及多人的任务（如"51-81号同学提交作业"）正常提取为一条。';
 function copyText(t) {
-  try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(function(){}, function(){}); return true; } } catch (e) {}
   var ta = document.createElement('textarea');
   ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
   document.body.appendChild(ta); ta.select();
-  var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
   document.body.removeChild(ta);
+  if (!ok && navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t).then(function(){ ok = true; }, function(){});
+  }
   return ok;
 }
 function copyPrompt() {
-  copyText(PROMPT_TEXT);
-  flash('提示词已复制，发给多模态 AI');
+  var ok = copyText(PROMPT_TEXT);
+  flash(ok ? '提示词已复制，发给多模态 AI' : '复制失败，请手动长按选择复制');
 }
 function normDate(s) {
   if (!s) return todayStr();
@@ -700,6 +742,7 @@ function renderSettings() {
   var out = getOutbox();
   var lines = [];
   lines.push('服务器：' + (s && s.url ? esc(s.url) : '未设置'));
+  lines.push('版本：v' + APP_VERSION);
   lines.push('上次同步：' + (snap && snap.syncedAt ? fmtTime(snap.syncedAt) : '从未同步'));
   lines.push('本地课表：' + (snap && snap.courses ? ('第 ' + (snap.weekNumber || '?') + ' 周 · ' + snap.courses.length + ' 门课') : '无'));
   var auto = localStorage.getItem('cw_auto_sync') === '1';
@@ -710,6 +753,7 @@ function renderSettings() {
   $('setStatus').innerHTML = lines.map(function(x){ return '<div>' + x + '</div>'; }).join('');
 }
 function boot() {
+  $('verTag').textContent = '本地版 v' + APP_VERSION;
   $('inDate').value = todayStr();
   $('evDate').value = todayStr();
   $('cdDate').value = todayStr();
